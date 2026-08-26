@@ -38,6 +38,229 @@ load, thread interleaving, or hour nine — which is what the rest of this was f
 | 7 | [Feature matrix](#stage-7--feature-matrix) | 🖐 | **outstanding** | The checklist exists: [TESTING_MATRIX.md](TESTING_MATRIX.md), 130 rows + 1.5.0's |
 | 8 | [1.4.0 regression suite](#stage-8--140-regression-suite) | 🔧 | done | 128 tests, all green; two performance regressions caught before release |
 | 9 | [1.5.0: the interpreter and the capture path](#stage-9--150-the-interpreter-and-the-capture-path) | 🔧 | done | 144 tests; a new interpreter harness; stage 1's last debt closed; a plan that was measurably wrong |
+| 10 | [1.6.0: harnesses that check the effect, not the flag](#stage-10--160-harnesses-that-check-the-effect-not-the-flag) | 🔧 | done | 250 tests; three new harnesses; four real bugs found, one of them an infinite loop |
+
+---
+
+## Stage 10 — 1.6.0: harnesses that check the effect, not the flag
+
+🔧 **Result: 144 → 251 tests, three new harnesses, and five real bugs — four found by them, one found by a user.**
+
+1.6.0 added roughly ten thousand lines. Three of the things it added could fail in
+ways no unit test would notice — a test run that lets a keystroke escape, a cascade
+that loops for ever, a package that ships without one of its pictures — so each got a
+harness built around the *effect* rather than around the flag that is supposed to
+produce it.
+
+### `--selftest dryrun` — proving a rehearsal touches nothing
+
+Every other self-test here can fail by printing a bad number. This one can fail by
+clicking on somebody's desktop, so it checks three things and none of them is "is the
+boolean set":
+
+1. **The suppression counter.** `selftest::send_blocked()` is the gate in front of
+   every `SendInput` *and* the counter behind it — one function, so there is no way to
+   suppress a send without recording it. 600 events produce 1 000 suppressed sends,
+   because a move and a click are two.
+2. **Nothing was left held.** `selftest::held()` back to zero.
+3. **No process was started.** The `Run a program` step in the fixture really does
+   name `cmd.exe` with arguments that would copy a file into place, and the test then
+   asserts that file is *absent*. Evidence rather than assertion.
+
+Verified by breaking it: with `StepKind::dangerous()` stubbed to `false`, `cmd.exe`
+ran and printed `1 file(s) copied.` into the middle of the report. A test that cannot
+fail is decoration.
+
+### `--selftest recovery` — and the infinite loop it found on its first run
+
+Recovery blocks were capped by the depth of a stack of return addresses, copying what
+`Call` does. That does not work here: a recovery block *ends* by popping that stack
+and returning to the step that failed, so when the step fails again the stack is
+already empty and the depth check sees nothing wrong.
+
+```
+the depth cap is what stops it            FAILED  16666667 runs, cap is 3
+```
+
+Sixteen and a half million iterations, stopped only by the interpreter's 50-million
+step fuel limit. The cap is now counted per step and cleared when the step succeeds.
+
+Two things worth keeping from it. A cap has to count the thing that actually repeats.
+And note *which* check caught it: `the run ends rather than recovering for ever`
+**passed** — the run did end. Only the check asserting a specific bound failed. "It
+terminates" would have been satisfied by a bug that runs sixteen million times.
+
+### `--selftest target` — testing a thing defined by falling over
+
+A target carries up to five ways of finding something. The interesting behaviour is
+not any one of them working, it is what happens when four do not — so the fixture
+makes everything except the coordinate deliberately unfindable and checks the cascade
+falls all the way through, lands on the coordinate, and says which method won.
+
+The timing check is the one worth having: the timeout is spent **once around the whole
+cascade**, not once per method. If it ever leaks into the per-method loop a two-second
+wait becomes eight, and this turns red instead of somebody noticing their macro got
+four times slower.
+
+### The bug that shipped, and the guard that should have caught it
+
+Three section headings — *Optimize recording*, *Templates* and *Open macros* — shipped
+drawing empty boxes. The emoji were correct in the source; egui's bundled font simply
+has no glyph for U+1F9F9, U+1F9E9 or U+1F5C2.
+
+There was already a test for exactly this, and it did not fire. It blocked a *range*:
+Symbols and Pictographs Extended-A, everything from Unicode 12, on the reasoning that
+the bundled font stops there. The font does not stop anywhere so tidy. It covers
+U+1F9E0 — the brain on the Scripts heading, shipped in 1.5.0 — and not U+1F9E9 or
+U+1F9F9, which sit a few codepoints away in the same block.
+
+A fourth glyph, U+1F9EA on the *Test run* button, turned out to be broken too — so
+the coverage of that one small block is:
+
+```text
+  U+1F9E0  brain          renders   (Scripts, since 1.5.0)
+  U+1F9E9  jigsaw piece   empty box
+  U+1F9EA  test tube      empty box
+  U+1F9F9  broom          empty box
+```
+
+One glyph in four. And U+1F5C2 sits in the same block as U+1F5A5, U+1F5BC and
+U+1F5D1, all three of which work. There is no rule here, only a list.
+
+**A range check cannot express "this font has a hole in it."** The rule is now
+inverted: an allowlist of every symbol character in the file, each one having been
+looked at in the running window.
+
+The first attempt at that allowlist was still too narrow — it scanned the six
+language tables, and the ✓ / ■ / ✗ marks beside a run in the run history are built
+in `Run::headline`, which never goes near them. That mark had been an empty box as
+well. The scan is now over the whole source file, comments included: constraining a
+comment's em dash costs nothing and removes the question of which literals count as
+interface.
+
+The replacements were picked next to codepoints already proven here — U+1F4C9 beside
+the U+1F4C8 used for step statistics, U+1F4C4 beside the U+1F4C5 used for the
+scheduler, U+1F4D1 between the U+1F4DA and U+1F4DC used for the library and the run
+history.
+
+Verified twice by putting the broom back — once in a language table, and once in
+`Run::headline`, which is the case the narrower version missed:
+
+```
+characters that are not on the list of glyphs known to render:
+  line 7121: '🧹' (U+1F9F9)
+```
+
+The lesson generalises past fonts: a guard written as "not obviously wrong" passes
+everything nobody thought of. A guard written as "known to be right" fails closed.
+
+### Two more bugs the tests found
+
+**A package that would have shipped without one of its pictures.** `templates_of`
+returned a step's target pictures and left out its *anchors* — the second picture a
+`near another picture` search needs. A package built from it would have carried the
+button and not the heading the button is found relative to, and would have failed on
+the recipient's machine and nowhere else. The dependency-walk test caught it, and the
+underlying gap turned out to be wider: `anchor_used` had never learned about targets
+at all, so the health checker was missing them too.
+
+**A flaky test.** `bezier_bows_away_when_curved` seeded itself from the clock, and
+about one draw in four hundred legitimately produces a flat arc. It failed once during
+a full run. Rewritten to judge two hundred *seeded* draws — deterministic, and
+strictly stronger, because a curve setting that did nothing would make all two hundred
+flat.
+
+### The measurement lesson, learned twice
+
+An absolute benchmark number is only comparable to one taken on the same machine in
+the same state.
+
+Switching the release profile to `opt-level = 3` needed a before-and-after. The first
+reading after a release build said the image search had gone from 22 ms to 38 ms — a
+75 % regression in a change that touched no vision code. Rebuilding the old code on
+the same toolchain gave 33.5 ms, so most of the gap was a background process holding
+the machine at 35 % CPU. An interleaved A/B under that load then said the two were
+indistinguishable.
+
+**That was also wrong.** Waiting for the machine to fall to 8 % and running three
+builds alternately gave numbers tight enough to read, and there was a real 7.6 %
+regression — from a single clippy "fix" that rewrote the per-pixel loop in
+`plane_grey`. Reverting only that restored the original figure exactly.
+
+So: rebuild the old code and run both alternately, and do not mistake a spread wider
+than the effect for the absence of an effect. Quieten the machine until the spread is
+smaller than what is being looked for.
+
+### Numbers
+
+| Gate | 1.5.0 | 1.6.0 |
+|---|---|---|
+| unit tests | 144 | **254** |
+| `--selftest dryrun` | — | 10 checks, 0 failed |
+| `--selftest target` | — | 8 checks, 0 failed |
+| `--selftest recovery` | — | 6 checks, 0 failed |
+| `--selftest simd` | — | 4 kernels, 0 disagreements |
+| `--selftest script=500` | 12 checks, 0 failed | 12 checks, 0 failed |
+| `--selftest churn=120` | held 0, peak 1 | 10 721 transitions, held 0, peak 1 |
+| timing, baseline p99 | ~4 µs | 3–6 µs |
+| vision, 64×64 full screen | ~22 ms | **10.6 ms** (`opt-level = 3`) |
+| release `.exe` | 8 041 984 B | 10 229 248 B |
+
+The binary grew for three reasons: about 1.7 MB from the optimisation level, most of
+the rest from roughly ten thousand lines of new code, and 20 KB from carrying four
+instruction sets instead of one.
+
+### What four instruction sets in one binary cost
+
+The question that produced `--selftest simd` was whether one executable could be
+built for `x86-64`, `x86-64-v2/v3/v4` and `znver1`..`znver5` at once and pick at run
+time. It cannot as nine whole-program builds — `-C target-cpu` is a property of a
+compilation and rustc emits one — but it can for the code the flag would actually
+have changed, which here is one loop.
+
+| | |
+|---|---|
+| kernels compiled in | 4 (sse2, avx, avx2 + fma, avx512) |
+| what they cost | **+20 480 B** — the release `.exe` went 10 208 768 → 10 229 248 B, both built here, same toolchain, same profile |
+| what they buy | 19.5 ms → 4.5 ms on a 128×128 search, one thread |
+| what a fat binary would have cost | 9 copies of a 10 MB executable, plus a self-extractor |
+
+That last row is the reason the fat-binary route was not taken even before measuring
+anything: unpacking an executable at start-up is the strongest antivirus heuristic
+there is, and this project already refuses UPX for the same reason.
+
+Measured on a Zen 3, one thread, median of 5, on a deterministic 1280×720 haystack —
+`--selftest simd`, run twice and read the second time:
+
+| Template | scalar | sse2 | avx | avx2 |
+|---|---|---|---|---|
+| 32×32 | 9.6 ms | 7.9 | 6.1 | 6.6 |
+| 63×63 | 6.9 ms | 4.2 | 4.2 | 4.5 |
+| 100×100 | 12.9 ms | 4.8 | 4.2 | 4.2 |
+| 128×128 | 19.9 ms | 6.2 | 4.9 | **4.7** |
+
+One table, one run, not a best-of across runs — the 128×128 row repeated at 19.5 /
+6.1 / 4.7 / 4.5 and 20.4 / 6.4 / 4.9 / 4.7 on either side of it, which is the spread
+to keep in mind before reading anything into a tenth of a millisecond.
+
+Two things worth reading out of that table rather than past it.
+
+**The big step is the first one.** Baseline x86-64 to SSE2 is 3.2× on the 128×128
+row; SSE2 to AVX2 is another 1.3×. The kernel is load-bound — two loads for three
+arithmetic operations — so the wider vectors and the fused multiply-add have less to
+win than the instruction-set marketing suggests. On the smaller templates AVX2 and
+AVX are inside the noise of each other, and on the 32×32 row AVX is ahead. The
+machines that gain most from this change are the old ones, which is the opposite of
+what a `.v3.exe` was for.
+
+**The tiers did not come out in the right order at first.** The first version of the
+AVX2 kernel measured *slower* than the plain AVX one — 5.3 ms against 4.5 — across
+every template size and both runs. That is not noise and it is not a mystery: with a
+single accumulator the loop is latency-bound, and an FMA's four-cycle latency is
+longer than a plain add's three, so fusing the multiply into the add made the
+dependency chain worse. Two accumulator chains per stream fixed it. The table is the
+only reason it was noticed; a single "vector vs scalar" speed-up number would have
+shown 4.2× and looked like a success.
 
 ---
 
@@ -430,4 +653,5 @@ schedule rather than stolen from the events behind it.
 Four faults were found in the test harnesses themselves, every one of which would
 otherwise have produced a confident and wrong conclusion. That ratio is worth
 remembering: a test that has never failed has not been tested either.
+
 
