@@ -250,10 +250,246 @@ If you want "shut the PC down when the script finishes", use a `Run` step with t
 | **Put text** | Variable or literal text → clipboard or file |
 | **Find element** | Ask Windows for an interface element and report where it is |
 | **Press element** | Press an interface element, through the application itself |
+| **Click target** | Press one thing on screen, however it can be found — **start here** |
+| **Wait for target** | Block until one thing on screen turns up (or goes away) |
+| **Read target** | Read the words at one thing on screen into a variable |
+| **Window** | Activate, minimize, move, resize, close, or wait for a window |
+| **Clipboard** | Copy, paste, set, read, clear, or wait for it to change |
+| **Notify** | Say something from the tray, without taking the foreground |
+| **Screenshot** | Write a picture of the screen to a file |
+| **Recovery / End recovery** | A block that runs when a step says it should |
 
 ---
 
 ## 7. Every step: in detail
+
+### 🎯 Click target · Wait for target · Read target
+
+*New in 1.6.0.* **The step to reach for first.**
+
+Every other step above says *how* to find something: by picture, by element, by
+coordinate. A target says *what*, and carries every way of finding it that was
+available when you recorded — tried in order until one works.
+
+```
+Click "Start"
+    1. UI element        Button, name "Start"
+    2. image             rec_20260826_0342_01
+    3. window-relative   Game +412,318
+    4. coordinate        1245, 720
+```
+
+If the application redraws its button, the element still finds it. If the application
+exposes nothing — every game does this — the picture finds it. If the window has
+moved, the window-relative offset finds it. The coordinate is the last resort and is
+always there, so the step never does *nothing*.
+
+#### You do not build that list
+
+Record with **Snip a picture at every click** switched on, stop, and press
+**Analyze**. Every click you made becomes a row: what it is now, what it could be,
+and a tick. **Apply the ticked suggestions** writes the script.
+
+#### Reliability
+
+One dropdown, and it is the whole interface to the cascade above.
+
+| Setting | What it tries |
+|---|---|
+| **Maximum** | Every way that was recorded, most durable first |
+| **Balanced** | The ways that survive a layout change, plus one fallback |
+| **Fast** | Only the best one |
+
+*Maximum* is the default. Use *Fast* for a step inside a tight loop, where the cost
+of looking is the point and a miss is cheap.
+
+#### The fields
+
+- **Called** — what it says in the step list. Filled in from the element's name when
+  there is one, and worth typing in when there is not: `Click "Claim"` reads better
+  than `Click rec_20260826_0342_07`.
+- **Ways of finding it** — the cascade, shown in the order it will actually be tried.
+  Ways the reliability setting has switched off are greyed rather than hidden, so you
+  can see what it left out. Add and remove them freely.
+- **Ask the application to press it** — when the element is what resolved, let the
+  application press its own button. Nothing moves on screen and the window need not
+  be in front.
+- **Time limit** — spent once around the whole cascade, not once per way.
+- **If it is not there** — the same four answers as everywhere else.
+
+#### What it writes
+
+`<name>.method` says which way worked — `UI element`, `image`, `coordinate`. Useful
+in a condition: a macro that has quietly fallen back to coordinates every night for a
+week is worth knowing about.
+
+`Read target` prefers to ask the element what it says, and reads the pixels only when
+there is no element to ask.
+
+---
+
+### 🔖 Markers, and `Play events` by name
+
+*New in 1.6.0.*
+
+`Play events 73…184` names events by number. Delete an event in the editor and every
+number stays exactly where it was — pointing at a different hundred and eleven
+events. The documentation has always warned about this.
+
+A **marker** is a name for a place in the recording. Put two down in the editor
+(the 🔖 panel under the range fields), then tick **Use markers** on a `Play events`
+step and choose them:
+
+```
+Play events   Start inventory → After inventory
+```
+
+Now insert, delete or crop events anywhere and the step still covers the same
+actions. The numbers stay visible underneath, and they are what an older build of the
+program plays — the names sit beside them, not instead of them.
+
+The end marker names the place *after* the region: "After inventory" is not part of
+it, which is how anybody would put one down.
+
+If you delete a marker a step was using, that step keeps playing whatever it last
+resolved to. That is deliberate: it is a better answer than playing nothing, or
+playing everything.
+
+
+### 🪟 Window
+
+*New in 1.6.0.* Everything that can be done to a window, in one step.
+
+**Which window** is a separate question from **what to do to it**, and the first one
+has four answers:
+
+| Find it by | Good for |
+|---|---|
+| **part of the title** | what this has always been. A browser tab or a document changes the title, so it is the least stable |
+| **the whole title** | when the title is exact and constant |
+| **the program** | `roblox` finds `RobloxPlayerBeta.exe`. Survives every title change there is |
+| **the program's full path** | two copies of the same program in different folders |
+
+**Find it again if it restarts** is on by default. A game that crashed and came back
+has a different window, and a night macro should carry on rather than aim at one that
+no longer exists.
+
+**What to do:** bring to the front · minimize · maximize · restore · ⚠ close it ·
+move to · resize to · centre on screen · wait until it is in front · wait until it
+appears · wait until it closes.
+
+Only the fields an action uses are shown. The three that wait use the time limit; the
+two that move use the numbers.
+
+> ⚠ **Close it** is treated as dangerous: a test run steps over it, the same way it
+> steps over `Run` and `Quit the app`. It can lose somebody's work.
+
+---
+
+### 📋 Clipboard
+
+*New in 1.6.0.* Copy · paste · set it to · read it into · clear it · **wait until it
+changes**.
+
+Copy and paste send Ctrl+C and Ctrl+V to whatever window is in front, through the
+same path as any other keystroke — so a test run suppresses them and the frame guard
+applies.
+
+**Wait until it changes** is the one with no workaround before now. It remembers what
+the clipboard held when the step began and blocks until it is different, then puts
+the new contents in a variable. That is how a macro knows a copy actually happened,
+instead of pressing Ctrl+C and guessing at a delay.
+
+---
+
+### 🩹 Recovery / End recovery
+
+*New in 1.6.0.* A block that runs when a step asks it to.
+
+Every step that looks for something has an **If it is not there** field. It now has a
+fifth answer: **run a recovery block**.
+
+```
+Click "Claim"            if it is not there → run "popup"
+Log  "claimed"
+Quit the app
+
+Recovery "popup"
+    Click "OK"
+    Wait 500 ms
+End recovery
+```
+
+When `Click "Claim"` misses, the script jumps into the block called `popup`, runs it,
+comes back, and tries the click again.
+
+**Why this is not just "retry more times."** Retrying is right when the thing was
+simply not there yet. It is useless when something is *in the way* — an error box, a
+login that expired, a dialog nobody expected — because looking again at the same
+obstructed screen gives the same answer. A recovery block does something about the
+obstruction first.
+
+Rules, all of them checked by **Check macro**:
+
+- Blocks are skipped in normal flow. Walking into one does not run it.
+- Blocks cannot nest, and cannot sit inside an `If` or a `While`.
+- A step may be recovered **three times** before the run gives up on it. The count is
+  cleared when the step finally succeeds, so a loop that recovers on each turn is not
+  punished for the turns before it.
+- A policy naming a block nobody wrote is reported as an error — that step looks
+  handled and is not.
+
+**Create a recovery block for this step** builds the skeleton for you.
+
+---
+
+### 🔔 Notify · 📷 Screenshot
+
+*New in 1.6.0.*
+
+**Notify** shows a balloon from the tray icon. Not a message box: a message box takes
+the foreground, and taking the foreground away from the thing being automated is how
+a macro breaks the very run it is reporting on. Needs the tray icon switched on.
+
+**Screenshot** writes a picture of the screen — or just the window in front — to a
+file. Left empty, it goes into this run's folder beside the failure screenshots, so
+everything about one run is in one place.
+
+---
+
+### ⌛ Adaptive waits
+
+*New in 1.6.0.* A checkbox on `Wait for`.
+
+Tick **Adaptive** and the step waits for as long as it has usually needed, learned
+from the run history — with the number you typed still there as the ceiling. What is
+learned is how long to wait *patiently*, not permission to wait for ever.
+
+The figure is half again the average, but never less than the slowest this step has
+ever been. That floor is the point: an average describes what usually happens, and a
+timeout sized to what usually happens fails on the night it matters.
+
+With fewer than five recorded runs it says nothing and your fixed number is used
+exactly as before. Test runs are excluded — no input was sent, so nothing on screen
+ever responded, and those timings are about nothing.
+
+---
+
+### 🔤 Built-in values
+
+*New in 1.6.0.* Nine names usable in any text field, no declaring required:
+
+`{clipboard}` · `{window.title}` · `{process.name}` · `{time}` · `{date}` ·
+`{mouse.x}` · `{mouse.y}` · `{screen.width}` · `{screen.height}`
+
+Press `Ctrl+K` and type *built-in* to insert one without remembering the spelling.
+
+A variable of the same name wins — if you set `time` yourself, `{time}` is yours. A
+name nothing recognises is left exactly as written rather than becoming an empty
+string, so a typo is visible instead of silently deleting part of your text.
+
+There is still no third kind of variable. These are all numbers or text.
+
 
 ### ▶ Play events
 
@@ -1275,4 +1511,5 @@ text "word" <region>
 ---
 
 Still stuck? Open an [issue](../../issues) with the macro file and the relevant part of the log. The `Note` step writes straight there — scatter a few in first.
+
 
