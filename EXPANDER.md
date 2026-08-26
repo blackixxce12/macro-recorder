@@ -361,8 +361,25 @@ An honest list, so you do not go looking.
 - **No forms.** `{form:Name}` does not exist. That is a window with fields and validation — perhaps later.
 - **No `{selection}`.** There is no way to read selected text in another application: the only route is to send Ctrl+C and take it off the clipboard, which breaks the clipboard and does not work everywhere. Besides, the expander fires on typing, and typing over a selection already replaces it.
 - **No undo with Backspace.** If the wrong thing expanded, delete it by hand.
-- **No case awareness.** `ADDR` and `addr` are the same abbreviation, and the replacement is always exactly as stored.
-- **No nesting.** A replacement cannot contain another abbreviation.
+- **No nesting.** A replacement cannot contain another abbreviation. This one is deliberate and is not going to change: `A → B → C → A` is a small programming language with a cycle detector in it.
+
+### Capitals — `Exact` · `Any case` · `Follow case`
+
+*New in 1.6.0.* Each entry has a **case** setting beside its trigger.
+
+| Setting | `addr` | `ADDR` | `Addr` |
+|---|---|---|---|
+| **Exact case** (default) | fires | does nothing | does nothing |
+| **Any case** | fires | fires, replacement as stored | fires, replacement as stored |
+| **Follow case** | `221B Baker Street` | `221B BAKER STREET` | `221B Baker Street` |
+
+`Exact` is the default, so every book written before 1.6.0 behaves exactly as it did.
+
+Only the literal text is re-shaped. A `{clipboard}` or a `{date}` keeps whatever casing it arrives with — shouting somebody's clipboard back at them is not what "follow case" means to anyone.
+
+Non-ASCII works: `АДР` shouts `БЕЙКЕР-СТРИТ`, not just the Latin letters in it.
+
+> **Correction.** Up to 1.5.0 this page said `ADDR` and `addr` were the same abbreviation. They never were — the comparison has always been exact, and the shouted form simply did nothing. The behaviour the old text described is now available, as **Any case**.
 - **No conditions or variables.** [Scripts](SCRIPTS.md) do that — a different job, but they can think.
 - **64 characters of memory.** A longer abbreviation will not fire. In practice this is not a limit.
 
@@ -433,3 +450,4 @@ paste   instant, but not everywhere, and borrows the clipboard
 ---
 
 Not working? Open an [issue](../../issues) with your `expansions.json`, what you typed, and what came out.
+
