@@ -9,7 +9,7 @@
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 [![Windows](https://img.shields.io/badge/Windows-10%20%2F%2011-0078D6?logo=windows&logoColor=white)]()
-[![Rust](https://img.shields.io/badge/Made%20with-Rust%201.97-orange?logo=rust&logoColor=white)]()
+[![Rust](https://img.shields.io/badge/Made%20with-Rust%201.98-orange?logo=rust&logoColor=white)]()
 [![egui](https://img.shields.io/badge/UI-egui%20%2F%20eframe%200.36-blue)]()
 [![Latest Release](https://img.shields.io/github/v/release/blackixxce12/Macro-Recorder?label=release&color=green)](https://github.com/blackixxce12/macro-recorder/releases)
 
@@ -117,7 +117,7 @@ That weekend project got slightly out of hand. 🦀
 | **Single .exe** | No installer, no .NET, no Python runtime — one file, double-click, done |
 | **Fearless concurrency** | Five roles run in parallel — low-level hooks, an event collector, a microsecond-accurate replay engine, a scheduler and the GPU-rendered UI — and the compiler guarantees they don't corrupt each other's state |
 | **Memory safety** | A tool that injects input into your system shouldn't scribble over an event buffer mid-raid. Outside the thin `unsafe` Win32 FFI layer, Rust makes whole classes of bugs impossible |
-| **Small & instant** | With `opt-level = "z"` + LTO + `strip`, the whole app is a few MB and starts instantly |
+| **Small & instant** | With `opt-level = 3` + LTO + `strip`, the whole app is a few MB and starts instantly |
 | **Honest reason** | I wanted a real excuse to learn Rust properly. Best way to learn — build something you actually use |
 
 ---
@@ -231,6 +231,7 @@ Facts above were taken from the official TinyTask site rather than SEO mirrors (
 - ⏸ **Pause and resume** — the schedule clock stops with you, so nothing fast-forwards afterwards
 - ⚡ Speed **0.1× – 3.0×** (and live `faster` / `slower` hotkeys), plus optional **timing jitter** (0–50 %)
 - 🖱 Absolute or relative mouse mode, optional **human-like curved movement** and per-click aim spread
+- 🎛 **Playback profiles** — *Desktop*, *Game*, *Human-like*: names for the combinations of the settings above that actually go together
 - 🛟 Stop always releases whatever the macro was holding down — no stuck Shift, no stuck mouse button
 
 **Decide, don't just replay**
@@ -245,6 +246,42 @@ Facts above were taken from the official TinyTask site rather than SEO mirrors (
 - 🔬 A **variables window** shows what it has worked out, with an optional pause before every step
 - ⚠️ Every step that looks for something says **what to do when it is not there** — carry on, stop, leave the loop, or retry
 - 📞 **`Call macro`** runs another macro file's script as a subroutine, sharing the variables
+
+**Build it without building it** *(new in 1.6.0)*
+
+- ✅ **Multi-select** — Ctrl+click and Shift+click, then duplicate, delete, enable, disable, or **wrap in If / Repeat / Group** in one press
+- 📁 **Group** — a name for a run of steps, with no effect on how the macro runs. A list of forty steps reads as six things
+- 🧩 **Twelve templates** — wait for a button then click it, handle a popup, log in, retry-and-recover, farm until a counter, run until a time, and more. Inserted as ordinary steps and edited like any others
+- 📚 **Macro library** — every macro in your `macros/` folder, insertable into this one as a call
+- 🧹 **Optimize recording** — strips hand tremor, auto-repeat, the walk to the starting position and idle time past two seconds. **Shows you what it would remove before it removes anything**
+- 💬 **The flow steps read as English** — *Repeat while*, *Do this if*, *Otherwise*, *Stop the loop*. Same model underneath; every existing macro is unchanged
+
+**Survive the night** *(new in 1.6.0)*
+
+- 🩹 **Recovery blocks** — a fifth answer to *what if it is not there*: run a named block of steps, then try once more. Retrying is right when the thing was not there yet; it is useless when something is *in the way*, and this deals with the obstruction
+- 📈 **Step statistics** — how many times each step ran, how often it worked, its average and its worst time, kept against the step itself rather than its position
+- ⌛ **Adaptive waits** — wait as long as this step has usually needed, learned from the run history, with your number still the ceiling
+- 🪟 **Window actions** — activate, minimize, maximize, restore, move, resize, centre, close, and wait until a window is in front, appears or closes. One step, one dropdown
+- 🎯 **Target window by program, not just title** — `roblox` finds `RobloxPlayerBeta.exe`, and it is found again if the game restarts
+- 📋 **Clipboard as a step**, including **wait until it changes** — how a macro knows a copy happened rather than guessing at a delay
+- 🔤 **Nine built-in values** — `{clipboard}`, `{window.title}`, `{time}`, `{mouse.x}` and the rest, in any text field
+- 🔔 **Notify** from the tray, and 📷 **Screenshot** to a file
+
+**Record intent, not coordinates** *(new in 1.6.0)*
+
+- 🎯 **Targets** — one step says *what* to press; the program carries every way of finding it that was available when you recorded, and tries them in order: UI element → image → text → window-relative → coordinate. The button moves, the theme changes, the window is re-opened somewhere else, and the step still works
+- 🎚 **Reliability: Maximum · Balanced · Fast** — the whole interface to that cascade. You pick a word, not an order of methods
+- 🔬 **Analyze recording** — after recording, a table of what each click is now and what it could be, with a tick per row. *Apply* rewrites the script
+- 🧠 **Recording remembers what was clicked** — the window, the process, the window rectangle, and the interface element under the cursor, all captured at the one moment they are free
+- 🔖 **Markers** — a name for a place in the recording, so `Play events 73…184` stops meaning something different every time you edit
+
+**Rehearse, check, diagnose** *(new in 1.6.0)*
+
+- 🧪 **Test run** — play the whole macro with nothing sent. Pictures are still searched for, text still read, variables still counted; every click and keystroke is counted instead of sent, and the two steps that reach past the input queue are stepped over
+- 🖼 **A screenshot and an explanation when a step gives up** — `the best match for "claim" scored 0.41, and the step asks for 0.85`, with what to try next. No model, no network: every number in that sentence was already known
+- 📜 **Run history** — what happened the last twenty times, newest first, with the screenshot attached
+- 🛡 **Macro health** — check it without running it: missing pictures, `Play events` ranges that no longer fit the recording, loops with no way out, fixed coordinates, plus a reliability score and a plain list of what this macro is able to do
+- ⌨ **Ctrl+K** — type part of a name, get the command
 
 **Automation & safety**
 
@@ -908,9 +945,18 @@ macro-recorder [OPTIONS]
   -n, --loops <N>      Repeat count (0 = infinite)
   -s, --speed <X>      Playback speed multiplier (0.05 - 10.0)
       --no-gui         Play the macro headless and exit
+      --simd <SET>     Pin the image-search kernel: auto (default), scalar,
+                       sse2, avx, avx2, avx512. The -C target-cpu spellings
+                       work too (x86-64-v3, znver3, …)
   -h, --help           Show this help
   -V, --version        Show the version
 ```
+
+`--simd` exists to answer a question, not to be needed. Leave it at `auto` and the
+program reads CPUID and picks; set it to a narrower kernel to see what a machine
+without that instruction set would have felt like, or to rule the kernel out when
+something looks wrong. A set this processor does not have is not an error — it says
+so and runs the widest one it can.
 
 Without `--no-gui` the options simply pre-load the GUI, which is handy for shortcuts:
 
@@ -930,12 +976,23 @@ Not documented as a feature so much as a way to check a machine before trusting 
 macro to it overnight. Each writes a table and a plain-English note on how to read it.
 
 ```powershell
+macro-recorder.exe --selftest dryrun          # proves a test run touches nothing
+macro-recorder.exe --selftest target          # the target cascade, on a real playback thread
+macro-recorder.exe --selftest recovery        # recovery blocks: entered, returned from, capped
 macro-recorder.exe --selftest vision          # capture, search and OCR, with numbers
+macro-recorder.exe --selftest simd            # every instruction set in the .exe, raced and checked
 macro-recorder.exe --selftest script          # the interpreter: miss policies, calls, step mode
 macro-recorder.exe --selftest timing          # the replay scheduler under load
 macro-recorder.exe --selftest churn=120       # the playback lifecycle, hammered
 macro-recorder.exe --selftest soak=2          # hours of captures, watching handles and memory
 ```
+
+`--selftest simd` answers "does this one .exe really use my processor?" — it lists
+every kernel compiled into the binary, says which ones this CPU can run, races them
+against each other on the same search and checks that they all find the planted
+template in the same place. A kernel that is quick and wrong finds buttons in the
+wrong place, and it would only do it on the machines that have it, so the agreement
+column matters more than the milliseconds.
 
 `--selftest vision` is the one to run after changing monitors: it prices a capture on
 *this* machine and says whether Desktop Duplication is available here. `--selftest
@@ -951,8 +1008,25 @@ Grab the latest `.exe` from the **[Releases](../../releases)** page. No installa
 
 | File | Requires | Notes |
 |---|---|---|
-| `MacroRecorder.exe` | Any x86-64 CPU | Universal — runs everywhere |
-| `MacroRecorder.v3.exe` | AVX2-capable CPU (Intel Haswell 2013+ / AMD Zen+) | Slightly faster on modern CPUs |
+| `MacroRecorder.exe` | Any x86-64 CPU | One build. Picks its own instruction set at start-up |
+
+There is no longer a separate `.v3.exe`. The image search — the one hot loop where
+the instruction set is worth anything — is compiled **four times into the same
+executable**, once each for baseline x86-64, AVX, AVX2 + FMA and AVX-512, and the
+right one is chosen from CPUID when the program starts. Measured with
+`--selftest simd` on a Zen 3, one 128×128 search over 1280×720, single-threaded:
+
+| Kernel | `-C target-cpu` equivalent | ms | vs plain loop |
+|---|---|---|---|
+| scalar | *(fallback)* | 19.9 | 1.00× |
+| sse2 | `x86-64`, `x86-64-v2` | 6.2 | **3.2×** |
+| avx | `sandybridge`, `bdver1-4` | 4.9 | **4.1×** |
+| avx2 | `x86-64-v3`, `znver1-3` | 4.7 | **4.2×** |
+| avx512 | `x86-64-v4`, `znver4/5` | *(not on this CPU)* | — |
+
+Most of that win is the first step, which every x86-64 machine now gets for free.
+Run `--selftest simd` to see the table for your own processor, and `--simd <set>` to
+pin one by hand.
 
 > ⚠️ **Antivirus note:** macro tools install global input hooks and inject synthetic input, so unsigned builds get flagged as suspicious. This is a false positive that affects every tool in this category — TinyTask's own changelog has entries about fighting it too. That's exactly why the source is open: [build it yourself](#️-build-from-source) and trust your own binary.
 
@@ -961,19 +1035,14 @@ Grab the latest `.exe` from the **[Releases](../../releases)** page. No installa
 ## 🛠️ Build from source
 
 ```bash
-# 1. Install Rust (1.97.1+, edition 2024): https://rustup.rs
+# 1. Install Rust (1.98.0+, edition 2024): https://rustup.rs
 # 2. Clone & build
 git clone https://github.com/blackixxce12/Macro-Recorder.git
 cd Macro-Recorder
 
-# Universal build
+# One build, for every processor. The image-search kernel is compiled four times
+# into it and picks itself at start-up — no target-cpu flag needed.
 cargo build --release
-
-# Optimized build (AVX2, a few % faster on modern CPUs)
-# CMD:
-set RUSTFLAGS=-C target-cpu=x86-64-v3 && cargo build --release
-# PowerShell:
-$env:RUSTFLAGS="-C target-cpu=x86-64-v3"; cargo build --release
 
 # Without the OCR backend (if WinRT bindings ever fail to build)
 cargo build --release --no-default-features
@@ -982,7 +1051,7 @@ cargo build --release --no-default-features
 cargo test
 ```
 
-The binary lands in `target/release/`. Release profile: `opt-level = "z"`, fat LTO, one codegen unit, symbols stripped, `panic = "abort"` — which is why the hook callbacks are written to be panic-free rather than relying on `catch_unwind`.
+The binary lands in `target/release/`. Release profile: `opt-level = 3`, fat LTO, one codegen unit, symbols stripped, `panic = "abort"` — which is why the hook callbacks are written to be panic-free rather than relying on `catch_unwind`.
 
 **Features:** `winocr` is on by default and provides text recognition through `Windows.Media.Ocr`. It ships no models — it uses the language packs already installed in Windows. `--no-default-features` disables it; everything else keeps working, and OCR steps report *"This build has no OCR backend"*.
 
@@ -1001,12 +1070,13 @@ Honest list — please read before filing a bug:
 | **Windows only** | Every capture/replay path goes through Win32. Non-Windows targets compile, but do nothing |
 | **Pausing drops a drag in progress** | Held keys and buttons are released when you pause, so a macro paused mid-drag resumes without the drag |
 | **One macro at a time** | Open/Save, recent files and profiles, but no tabs or queue |
+| ~~**`Play events` ranges are still indices**~~ | **Fixed in 1.6.0.** Put markers down and tick *Use markers*, and the range follows your edits. The numbers stay visible underneath, and **Check macro** still catches a numbered range that no longer fits |
 | **Exported `.exe` is ~5 MB** | The player is a copy of the whole app. TinyTask's ~60 KB output is smaller by design |
 | **Templates aren't embedded** | An exported `.exe` that searches for images needs the `templates/` folder beside it |
 | **AHK export ignores scripts** | Only recorded events are translated — conditions, loops and variables are not |
 | **Scripted playback skips some flat-replay features** | Timing jitter, the global pixel stop condition and the end-of-run power action apply to flat replay only. Inside a script use a `pixel` condition and the `Quit the app` step instead |
 | **No TinyTask `.rec` import** | The format is undocumented; a guessed parser would corrupt macros silently rather than fail loudly |
-| **Coordinates are screen-absolute** | DPI awareness stops Windows from lying about pixels, but a macro still assumes the same window layout as when it was recorded. Maximize your target window before recording, or use anchoring |
+| **Coordinates are screen-absolute** | DPI awareness stops Windows from lying about pixels, but a *coordinate* still assumes the same window layout as when it was recorded. Since 1.6.0 a recorded click does not have to stay a coordinate: **Analyze recording** turns it into a target that finds its button by element, picture or window offset first. Maximize your target window before recording, or use anchoring, if you keep the coordinates |
 | **Scripted image search is at 1.0×** | The "other scales" option applies to the test panel only. A template cut on a different display is handled by its scale sidecar, not by a scale sweep |
 | **UI Automation sees nothing in games** | It only reports what an application chooses to expose. Unity, DirectX, OpenGL and canvas interfaces expose nothing, and across a privilege boundary it is limited or silent. In Roblox it will find nothing |
 | **The overlay is a layered window, not a compositor effect** | It draws with GDI in physical pixels, which should keep it correct on a mixed-DPI desktop — that part has been reasoned about rather than measured. It is also a plain always-on-top window, so a game running exclusive full-screen will cover it; use borderless windowed while diagnosing |
@@ -1104,7 +1174,7 @@ System-level input automation and simulation utilities frequently trigger heuris
 2. **Lack of a Commercial Digital Certificate (Code Signing)**
    * Signing `.exe` files with EV code-signing certificates is expensive. Unsigned binaries from open-source projects receive lower reputation scores from Windows SmartScreen and AI-driven antivirus engines.
 3. **Rust Compiler Optimizations**
-   * Compiling with target optimization flags (such as LTO and `x86-64-v3` instruction sets) produces machine code patterns that automated scanners sometimes misinterpret as generic unknown threats (`Heur.BKG`, `Trojan.Generic`).
+   * Compiling with target optimization flags (LTO, one codegen unit) and carrying four hand-written SIMD kernels — including AVX-512 that most machines will never execute — produces machine code patterns that automated scanners sometimes misinterpret as generic unknown threats (`Heur.BKG`, `Trojan.Generic`). Dispatching on CPUID is a normal thing for a fast program to do and a normal thing for a packer to do, and a scanner cannot always tell.
 
 ---
 
@@ -1138,4 +1208,5 @@ Built with [egui / eframe](https://github.com/emilk/egui), [windows-rs](https://
 [tracing](https://github.com/tokio-rs/tracing).
 
 Inspired by **TinyTask** — thanks for a decade of quietly saving people's hands.
+
 
