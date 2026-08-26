@@ -7,6 +7,264 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); version
 
 ---
 
+## [1.6.0]
+
+The release about not trusting a coordinate.
+
+A recording has always been a list of coordinates, and coordinates are the brittle
+part: the window moves, the resolution changes, the list opens one row lower, and
+every click lands somewhere it should not. The cure has existed since 1.2 — ask
+Windows for the button by name, or find its picture — but as separate steps somebody
+had to choose between and build by hand.
+
+1.6.0 makes that the program's job. It also makes the program able to say what it
+just did, why it stopped, and what it is about to do — which turns out to be the
+same problem seen from the other end.
+
+### Added
+
+#### Targets — one thing to point at, several ways to find it
+
+- **`Click target`, `Wait for target`, `Read target`.** One step that says *what* to
+  press and lets the program work out *how*:
+
+  ```
+  Click "Start"
+      1. UI element        Button, name "Start"
+      2. image             rec_20260826_0342_01
+      3. window-relative   Game +412,318
+      4. coordinate        1245, 720
+  ```
+
+  Tried in order; the first that resolves wins. The step records which one did, so
+  the run history and the overlay can say *how* a click was aimed rather than only
+  where.
+
+- **Reliability: Maximum · Balanced · Fast.** The whole interface to that cascade.
+  You pick a word, not an order of methods.
+
+- **Recording now remembers what was clicked, not just where.** At the moment of each
+  click it keeps the window title, the process, the window rectangle, the click's
+  position inside that window, and — where the application exposes one — the UI
+  Automation element under the cursor. All of it is free at that moment and
+  impossible to recover an hour later.
+
+- **Analyze recording.** A table of what each click is now and what it could be, with
+  a tick per row. *Apply* rewrites the script.
+
+- **Markers.** A name for a place in the recording, and the fix for the trap the
+  README has always warned about: `Play events 73…184` names events by number, and
+  deleting an event in the editor leaves every number saying what it said. A marker
+  moves with the events around it.
+
+#### Rehearse, check, diagnose
+
+- **Test run.** Play the whole macro with nothing sent. Pictures are still searched
+  for, text still read, variables still counted; every click and keystroke is counted
+  instead of sent. `Run a program`, `Quit the app` and `Close a window` are stepped
+  over, and marked ⚠ in the list.
+
+- **A screenshot and an explanation when a step gives up:**
+
+  ```
+  the best match for "claim" scored 0.41, and the step asks for 0.85
+  Try:
+    • the picture was cut at 150 % and this screen is at 100 %
+    • it searched the whole screen — telling it where to look is faster
+  ```
+
+  No model and no network. Every number in that sentence was already known.
+
+- **Run history** — what happened the last twenty times, newest first, with the
+  screenshot attached.
+
+- **Macro health.** Check it without running it: missing pictures, `Play events`
+  ranges that no longer fit the recording, loops with no way out, fixed coordinates,
+  a recovery policy naming a block nobody wrote — plus a reliability score and a plain
+  list of what this macro is able to do.
+
+- **Step statistics** — how many times each step ran, how often it worked, its average
+  and its worst time. Kept against the step itself rather than its position.
+
+#### Surviving the night
+
+- **Recovery blocks.** A fifth answer to *what if it is not there*: run a named block
+  of steps, then try once more. Retrying is right when the thing was not there yet;
+  it is useless when something is *in the way*, and this deals with the obstruction.
+
+- **Adaptive waits.** Wait as long as this step has usually needed, learned from the
+  run history, with your number still the ceiling.
+
+- **Window actions** — activate, minimize, maximize, restore, move, resize, centre,
+  close, and wait until a window is in front, appears or closes. One step, one
+  dropdown.
+
+- **Target window by program, not just title.** `roblox` finds
+  `RobloxPlayerBeta.exe`, and it is found again if the game restarts.
+
+- **The clipboard as a step**, including **wait until it changes** — how a macro knows
+  a copy happened rather than guessing at a delay.
+
+- **Nine built-in values** — `{clipboard}`, `{window.title}`, `{process.name}`,
+  `{time}`, `{date}`, `{mouse.x}`, `{mouse.y}`, `{screen.width}`, `{screen.height}`.
+
+- **Notify** from the tray, and **Screenshot** to a file.
+
+#### Building it without building it
+
+- **Multi-select.** Ctrl+click and Shift+click, then duplicate, delete, enable,
+  disable, or **wrap in If / Repeat / Group** in one press.
+
+- **Group** — a name for a run of steps, with no effect on how the macro runs.
+
+- **Twelve templates** — wait for a button then click it, handle a popup, log in,
+  retry-and-recover, wait until an app is ready, farm until a counter, run until a
+  time, and more.
+
+- **Macro library** — every macro in your `macros/` folder, insertable as a call.
+
+- **Optimize recording** — strips hand tremor, auto-repeat, the walk to the starting
+  position and idle time past two seconds. **Shows you what it would remove before it
+  removes anything.**
+
+- **Command palette.** `Ctrl+K`, then type part of a name.
+
+- **Playback profiles** — *Desktop*, *Game*, *Human-like*.
+
+- **Case-aware snippets** — *Exact case*, *Any case*, *Follow case*, where `ADDR`
+  gives a shouted replacement and `Addr` a capitalised one.
+
+#### Packaging
+
+- **`.mrpkg` — a macro and everything it needs, in one file.** The pictures it looks
+  for and the macros it calls travel with it. Still gzipped JSON: open it in a text
+  editor and read it.
+
+  This closes two of the limitations this README has always listed: an exported
+  `.exe` needing its `templates/` folder beside it, and a `Call` step naming a file
+  that has to travel separately.
+
+- **Package inspector** — what a macro needs and whether it is all here, before you
+  send it anywhere.
+
+- **A capability list before you run somebody else's macro** — mouse, keyboard, screen
+  capture, OCR, UI Automation, clipboard, files, windows, and with a ⚠ the three worth
+  a second look: starting programs, shutting the PC down, calling another macro file.
+  Worked out from the steps, so it cannot be wrong about a macro somebody handed you.
+
+- **Several macros open at once**, and a **queue** that plays them one after another.
+
+#### One executable that compiles itself for every processor
+
+- **The `.v3.exe` is gone, and nothing was lost with it.** The image search — the one
+  loop in this program where the instruction set is worth anything, everything else
+  waits on the GPU or on Windows — is now compiled **four times into the same
+  binary**, and the right one is chosen from CPUID when the program starts.
+
+  | Kernel | What `-C target-cpu` would have to say | 128×128 search, 1280×720, one thread |
+  |---|---|---|
+  | scalar | *(fallback)* | 19.9 ms |
+  | sse2 | `x86-64`, `x86-64-v2` | 6.2 ms — **3.2×** |
+  | avx | `sandybridge`, `bdver1-4` | 4.9 ms — **4.1×** |
+  | avx2 | `x86-64-v3`, `znver1-3` | 4.7 ms — **4.2×** |
+  | avx512 | `x86-64-v4`, `znver4`, `znver5` | not on the machine this was measured on |
+
+  Most of the win is the first step, and every x86-64 machine now gets it without a
+  flag or a second download. Four instruction sets in one binary cost **20 480 bytes**
+  — measured, both builds made here: 10 208 768 B before, 10 229 248 B after.
+
+  Two things this deliberately does **not** claim. It is not nine whole-program
+  builds in one file: `-C target-cpu` is a property of a compilation, rustc emits
+  one, and the only way to have nine is to ship nine and unpack one at start-up —
+  which is self-extraction, which is the single strongest antivirus heuristic there
+  is, and this project does not even use UPX for that reason. And `#[target_feature]`
+  enables *instructions*, not a *scheduling model*: a `znver3` build also gets Zen 3's
+  instruction ordering, and no run-time choice can. That part still belongs to
+  whatever the build was made for. It is also the small part.
+
+- **`--simd <set>`** pins the kernel by hand — `auto` (the default), `scalar`, `sse2`,
+  `avx`, `avx2`, `avx512`, or the `-C target-cpu` spelling that maps onto one of them
+  (`x86-64-v3`, `znver3`, …). A set this processor does not have is not an error: it
+  says so and runs the widest one it can.
+
+- **`--selftest simd`** lists every kernel in the binary, says which ones this
+  processor can run, races them on the same search and checks they all find the
+  planted template in the same place — the agreement column matters more than the
+  milliseconds, because a kernel that is quick and wrong finds buttons in the wrong
+  place and would only do it on the machines that have it.
+
+- **AVX-512 has to earn its place.** On Zen 4 the 512-bit operations go through
+  256-bit units and on several Intel parts they pull the core's clock down, so the
+  wide and the narrow kernel are raced once at start-up — about a millisecond — and
+  the wide one is taken only if it wins by five per cent. A table of model numbers
+  would have been wrong within a year.
+
+### Changed
+
+- **File format 3 → 4.** `markers` is new, and `Play events` may carry the two marker
+  names it sits between. Both are optional, so a version 3 macro loads and behaves
+  exactly as it did — there is a test that says so.
+
+- **The flow-control steps read as English.** `While` is now *Repeat while*, `If` is
+  *Do this if*, `Else` is *Otherwise*, `Break` is *Stop the loop*. Only the words
+  changed.
+
+- **Every step now has an identity**, filled in the first time an older macro is
+  loaded, so statistics and learned timings follow the step rather than its position.
+
+- **`Click image`, `Press element` and `Click` are unchanged and still load.** They
+  simply stop being the first thing the Add menu offers.
+
+- **Built with Rust 1.98.0**, and the release profile moved from `opt-level = "z"` to
+  `opt-level = 3`. The image search runs at half the time it used to — 22 ms to 11 ms
+  on a 2560×1440 desktop — at the cost of about 1.7 MB of binary.
+
+- **The correlation kernels carry two accumulator chains instead of one**, and take
+  two vectors per turn of the loop. This is not a micro-optimisation, it is the
+  difference between the tiers coming out in the right order: written the obvious way
+  with a single accumulator, the AVX2 kernel measured *slower* than the plain AVX one
+  it exists to beat — 5.3 ms against 4.5 on a 128×128 template — because one chain
+  makes the loop latency-bound rather than throughput-bound, and an FMA's four-cycle
+  latency is longer than a plain add's three. `--selftest simd` is what caught it,
+  which is the argument for printing a row per kernel rather than one speed-up
+  number.
+
+### Fixed
+
+- **`EXPANDER.md` was wrong about capitals.** It said `ADDR` and `addr` were the same
+  abbreviation. They never were — the comparison has always been exact and the shouted
+  form simply did nothing. The behaviour the page described is now available as *Any
+  case*.
+
+- **A flaky test.** `bezier_bows_away_when_curved` seeded itself from the clock and
+  failed at random about one run in four hundred. It now judges two hundred seeded
+  draws.
+
+- **Three section headings and the Test run button drew empty boxes.** *Optimize recording*, *Templates* and
+  *Open macros* used emoji the bundled font has no glyph for. The test meant to catch
+  this blocked a range of codepoints rather than checking against what the font
+  actually has, and the font's coverage has holes in it. It is now an allowlist.
+
+### Testing
+
+- **254 unit tests**, up from 144. Three of the new ones are about the multi-kernel
+  image search: that every instruction set this processor can run finds the same
+  template in the same place (at widths that are a whole number of vectors, widths
+  that leave a tail in every kernel, and widths narrower than a vector, because each
+  is a separate chance to read past the end of a row); that `--simd` takes the
+  `-C target-cpu` names people will actually type; and that whatever gets chosen is
+  something this machine can run.
+- **Four new self-tests**: `--selftest dryrun` proves a test run touches nothing (it
+  checks the effect, not the flag — the `Run a program` step really does name a
+  command that would leave a file behind); `--selftest target` drives the cascade with
+  every method but the coordinate deliberately unfindable; `--selftest recovery` walks
+  a recovery block in and out; `--selftest simd` races every kernel in the binary and
+  checks they agree.
+- `timing`, `vision`, `script`, `churn` and `soak` all unchanged in behaviour and
+  green.
+
+---
+
 ## [1.5.0]
 
 The release about the two things that were still done by hand. Recording produced
@@ -596,4 +854,5 @@ condition · built-in editor with three views · script engine with 17 step kind
 6 conditions and variables · image search · OCR through `Windows.Media.Ocr` · scheduler ·
 target window · 7 rebindable hotkeys · 9 themes · 6 languages · `.exe` and AutoHotkey
 export · settings profiles · headless CLI.
+
 
