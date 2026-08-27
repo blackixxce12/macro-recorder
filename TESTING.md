@@ -41,6 +41,70 @@ load, thread interleaving, or hour nine — which is what the rest of this was f
 | 10 | [1.6.0: harnesses that check the effect, not the flag](#stage-10--160-harnesses-that-check-the-effect-not-the-flag) | 🔧 | done | 250 tests; three new harnesses; four real bugs found, one of them an infinite loop |
 | 11 | [1.7.0: the matrix, run properly](#stage-11--170-the-matrix-run-properly) | 🖐 | done | ~170 matrix rows driven for real; six defects found and fixed; two phantoms caught before they were reported |
 | 12 | [1.8.0: saying it before it happens](#stage-12--180-saying-it-before-it-happens) | 🔧 🖐 | done | 271 tests; the pre-flight became a gate; 48 matrix rows driven; five defects found, two of them by promoting a diagnostic to a gate and three by looking at panels nobody had looked at |
+| 13 | [1.9.0: the handbook](#stage-13--190-the-handbook) | 🔧 | done | 278 tests; forty-six articles; fifty-one explanatory strings removed and a test that keeps them out |
+
+---
+
+## Stage 13 — 1.9.0: the handbook
+
+🔧 **Result: 271 to 278 tests, and a documentation feature tested the way code is.**
+
+Nothing about how macros run changed here, so there was nothing to benchmark and no
+new failure mode to hunt. The testing question was the one a content feature actually
+poses: **what can go wrong with forty-six articles that a compiler will not catch?**
+
+Four things, and all four are now assertions:
+
+- **An article that exists in one language and not the other.** Every topic carries an
+  English and a Russian body; a missing one would render as an empty page in one
+  language only, which is exactly the kind of fault nobody using the other language
+  ever sees.
+- **A stub.** A body under two hundred characters is a restated label rather than an
+  explanation. The test fails on one, which is what stops a topic being added with a
+  placeholder and left there.
+- **A section header pointing at a topic that does not exist.** The mapping from
+  headers to articles is twenty-four string literals, and a typo in one of them opens
+  an empty page. The test reads them back out of this file and resolves each, so the
+  two cannot drift apart.
+- **Markup that does not balance.** An odd number of backticks in a line silently
+  changes the font for the rest of it. Fences are skipped, since a fence is three.
+
+The fifth is the one worth keeping longest: **no explanatory string may come back into
+the interface**. The clutter this release removed did not arrive all at once — it
+arrived one field at a time over eight releases, each addition perfectly reasonable on
+its own. A grep in a test is the only thing that argues with the ninth.
+
+### What driving it found
+
+Three things, none of which a test would have caught, and all of which one look did:
+
+- **Fenced code blocks were not in the markup at all.** Two articles wanted to show
+  what `--check` prints and what a resolution trace looks like. Both are pictures made
+  of characters, and re-wrapped in a proportional font they stop being pictures. The
+  grammar grew a fifth thing.
+- **Prose set across the full window width.** A manual that gets harder to read as the
+  window gets wider is a manual with no measure. Capped at a reading width.
+- **Bullets running off the right edge while the paragraph above them wrapped
+  correctly.** A horizontal layout hands its children a width to *extend* into rather
+  than one to wrap at. Bullets are indented paragraphs now, with the dot as the first
+  run of the same wrapped block.
+
+### Numbers
+
+| Gate | 1.8.0 | 1.9.0 |
+|---|---|---|
+| unit tests | 271 | **278** |
+| `--selftest dryrun` | 10 checks, 0 failed | 10 checks, 0 failed |
+| `--selftest target` | 8 checks, 0 failed | 8 checks, 0 failed |
+| `--selftest recovery` | 6 checks, 0 failed | 6 checks, 0 failed |
+| `--selftest script=500` | 12 checks, 0 failed | 12 checks, 0 failed |
+| `--selftest simd` | 4 kernels, 0 disagreements | 4 kernels, 0 disagreements |
+| `--selftest churn=120` | 10 558 transitions, held 0 | 10 482 transitions, held 0 |
+| release `.exe` | 10 437 632 B | 10 565 632 B (+125 KB) |
+
+The 125 KB is the handbook: ninety-two articles of prose, in two languages, compiled
+into the binary. That is roughly a hundredth of the executable for the thing that
+answers the question every screenshot of this program raises.
 
 ---
 
