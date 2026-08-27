@@ -625,11 +625,208 @@ The one that writes files and rewrites your macro, so it is first.
 
 ---
 
+## T. 1.8.0 🧪
+
+Everything here is new and untouched by a human. Nothing in it is a new thing a macro
+can *do*, so the risk is not "does the feature work" but **"does it say something
+false, and does it stand in the way when it should not"** — a check that refuses a
+healthy macro is worse than no check at all.
+
+Rows marked 🧪 are 1.8.0.
+
+### T1. The pre-flight gate 🧪
+
+| ID | Do | Expect |
+|---|---|---|
+| T-1 | A macro with a `Click image` naming a template that is not in `templates/`. Press **Play** | A dialog: *This macro will not work*, listing the missing picture with its step number. Nothing is clicked |
+| T-2 | Press **Don't run it** | Dialog closes, status line says it was refused and how many things stopped it. Still nothing clicked |
+| T-3 | Repeat T-1 and press **Run it anyway** | It runs, and fails on that step as it always would |
+| T-4 | Immediately press **Play** again | The dialog comes back. **"Run it anyway" is one shot** — if it sticks, the check has quietly become a button again |
+| T-5 | The same broken macro, started with the **play hotkey** while the window is minimised to the tray | Refused. The dialog appears (restore the window to see it), and no input is sent |
+| T-6 | The same macro on a **schedule**, set one minute ahead, window in the tray | The minute passes and nothing runs. The log names the errors. This is the row the feature exists for |
+| T-7 | The same macro via the **queue** | Refused at that entry |
+| T-8 | The same macro with **Test run** | **It runs.** A rehearsal is exempt on purpose — it sends no input, and trying a macro you suspect is broken is what a rehearsal is for |
+| T-9 | A macro with only *warnings* (a fixed coordinate, no target window). Press **Play** | It just runs. No dialog. **A warning must never block** |
+| T-10 | A macro with unbalanced `If`/`EndIf`, press Play | Refused, and the finding says where |
+| T-11 | Fix the fault the dialog named, press Play | Runs. The check reads the macro as it is now, not as it was when the panel was last filled in |
+
+### T2. `--check` and headless 🧪
+
+| ID | Do | Expect |
+|---|---|---|
+| T-12 | `--play good.mrz --check` | Prints the ✔ lines, the score and the capability list. **`$LASTEXITCODE` is 0** |
+| T-13 | `--play broken.mrz --check` | Prints the ✖ lines too. **Exit code 1**. Note: a macro with *unbalanced blocks* is refused by `normalize()` at load, so it is **exit 2**, not 1 — `Rule::Unbalanced` is only reachable on a script being edited in memory |
+| T-14 | `--play nosuchfile.mrz --check` | One line naming the file and the OS error. **Exit code 2** |
+| T-15 | A macro with warnings only, `--check` | Warnings print. **Exit code 0** — warnings must not change the code |
+| T-16 | `--play broken.mrz --no-gui` | Refuses to start, with the reason and the suggestion to pass `--no-check`. Non-zero exit. **No input is sent** |
+| T-17 | `--play broken.mrz --no-gui --no-check` | It runs. The check still ran and is still in the log |
+| T-18 | `--play broken.mrz --check --no-gui` | Checks and stops. **`--check` wins over `--no-gui`** — it must not check and then run it anyway |
+| T-19 | `--check` with no `--play` | Says so on stderr, exit code 2 |
+| T-20 | Put T-12 and a real run in one `.bat`/Task Scheduler action, gated on the exit code | The night's work either happens or does not, instead of happening halfway |
+
+### T3. The new rules 🧪
+
+| ID | Do | Expect |
+|---|---|---|
+| T-21 | Macro A has `Call B`; macro B has `Call A`. Check A | ✖ *a call that comes back to a macro already running*, naming the chain `B → … → A`, pointing at the step **in A** |
+| T-22 | A macro whose `Call` names itself | Same, pointing at that step. `child` and `child.json` must count as one name |
+| T-23 | A macro that calls C twice, and another that also calls C | **No finding.** A diamond is not a cycle, and calling it one would flag every shared login step |
+| T-24 | Disable the recursive `Call` step and re-check | No finding. A disabled step is a note, not a plan |
+| T-25 | `Call` a path built from a variable, e.g. `{name}.json` | No cycle finding and no missing-call finding — it is not knowable before the run, and guessing would be a false alarm every time |
+| T-26 | A macro with `Read number`, **Reads in** left at *the Windows languages* | ⚠ *reads text, and no recogniser language is set* |
+| T-27 | The same macro with nine `Read number` steps | **One** warning, not nine |
+| T-28 | Set **Reads in** to a real language and re-check | The warning is gone |
+| T-29 | Record something on a 150 % display, then change Windows to 100 % and check it | ⚠ *recorded at a different display scale*, reading `150 % → 100 %` |
+| T-30 | The same on a macro that aims **only** by picture or by element | **No finding.** Templates carry the scale they were cut at; complaining here would be complaining about the weather |
+| T-31 | Change the resolution rather than the scale | ⚠ *recorded on a different screen size*, with both sizes |
+| T-32 | Check a macro with a template kept as a **folder of variants** (`templates/claim/a.png`, `b.png`) | Counted as found. **This was reported as a missing picture before 1.8.0** and would now block the run |
+| T-33 | The same folder template, **Export as one file** | The variants are in the package. Import it elsewhere and the macro still finds the button |
+
+### T4. Reading a file from the future 🧪
+
+| ID | Do | Expect |
+|---|---|---|
+| T-34 | Hand-edit a macro's `"version"` to `99` and add a field this build cannot know. Open it | It loads. The status line says it was written by a newer version, **at the moment it is opened** — not only when you try to save |
+| T-35 | Check it | ✖ *written by a newer version — part of it has been dropped: 99 > 5*. The Run button is gated on it |
+| T-36 | Press **Save** | A dialog naming both formats and saying the loss will be written to disk. **Nothing is written yet** |
+| T-37 | Press **Don't run it** / cancel | The file on disk is byte-for-byte unchanged. Check it with a hash |
+| T-38 | Press **Save anyway** | It saves, at format 5, with the unknown field gone. That is the user's decision, taken knowingly |
+| T-39 | Open a **1.5.0** (`"version": 3`) macro, save it, reopen | Says version 5. It behaves exactly as it did. No dialog at any point |
+| T-40 | The same for a bare `[ … ]` array (v1) and a v2 file | Both load, both come back as 5 |
+
+### T5. Where the recording was made 🧪
+
+| ID | Do | Expect |
+|---|---|---|
+| T-41 | With **Note the display and the front window** on, record something with a game in front | The macro file gains a `recorded` block: date, screen size, dpi, monitor *n* of *m*, the game's `.exe`, its title, the keyboard layout |
+| T-42 | Open **Where this was recorded** | Every row matches what the machine is doing now, in ordinary colour |
+| T-43 | Change the display scale and reopen the panel | The Scale row is coloured and reads `150 % → now 100 %`. **This is the twenty-pixels answer** |
+| T-44 | Unplug a second monitor and reopen | The Monitor row is coloured |
+| T-45 | Switch the keyboard layout and reopen | The Keyboard row is coloured |
+| T-46 | Turn the box **off**, record, and look at the file | No `recorded` block at all. The panel says nothing was written down |
+| T-47 | Open a macro recorded before 1.8.0 | Panel says nothing was written down. No errors, no invented values |
+| T-48 | Check that the note is taken **before** the first event | `process` is the application you were about to work in, **not** Macro Recorder itself |
+| T-49 | Record on the secondary monitor of two | `monitor` says 2 of 2, not 1 |
+
+### T6. Why a step did that 🧪
+
+| ID | Do | Expect |
+|---|---|---|
+| T-50 | Run a macro with a `Click target` that has a full cascade, then open **Why a step did that** | The step is in the list. Every rung that was tried is shown in order, ticked or crossed |
+| T-51 | Make the UIA rung fail (close the app's accessibility, or use a game) and the image rung succeed | `✖ UI Automation` above `✔ Image`, and the image line carries `score / threshold` |
+| T-52 | Make the image rung fail below its threshold | The line still shows the score it did reach — `0.610 / 0.85`. **The number is the whole point** |
+| T-53 | A target that fell through to its coordinate, after moving the window | *Where:* shows recorded and actual, with the difference `(-18, +14)` |
+| T-54 | A target found by element only | No coordinate row. It must not invent a discrepancy where there is no recorded coordinate |
+| T-55 | Run a macro that loops 20 times | *Cycle:* counts from **1**, not 0, and the newest entries are at the top |
+| T-56 | Run a macro with a step set to *try again 3 times* that keeps missing | *Tries:* says 3 |
+| T-57 | Run something with more than 64 aiming steps | The oldest fall off. The list stays at 64 and the newest are kept |
+| T-58 | Start a second run | The list is cleared at the start of the run, not the end — the previous run's traces survive until you start another |
+| T-59 | Press **Clear** | Empty, and the panel says nothing has aimed at anything yet |
+| T-60 | Run a long macro with the debug overlay **off** | Traces are still there. This is not tied to anything being watched — you cannot switch it on after the fact |
+| T-61 | Time a tight `While` loop with a target step, with and without a 1.7.0 build | No measurable difference. A trace per step must not cost anything a person can see |
+
+### T7. What a run had to do 🧪
+
+| ID | Do | Expect |
+|---|---|---|
+| T-62 | Run a macro where every target is found the best way. Open **Run history** | *How hard it worked:* · *nothing unusual* |
+| T-63 | Force a fallback (make the UIA rung fail, let the picture rung win) | `n × found the second way`, in amber |
+| T-64 | Use `Read number` with **try each** preparation on hard-to-read text | `n × extra reading pass` |
+| T-65 | A step with a recovery block that gets entered | `1 × recovery block` and `n ms in recovery`, and the ms is roughly the time actually spent inside |
+| T-66 | A macro whose every miss policy is *carry on*, with a step that misses | Outcome is still ✔ **and** `1 × step missed`. **This is the case `Completed` could never express** |
+| T-67 | Look for a second score out of 100 | There isn't one, and there must not be. The pre-flight score measures something else |
+| T-68 | Open the history from a **1.7.0** install (a `history.jsonl` with no `effort` field) | Every old line loads and reads as a run that did nothing unusual. No parse errors, no dropped rows |
+| T-69 | A **test run** | Still marked as a rehearsal, and still excluded from the learned timings |
+
+### T8. The templates folder 🧪
+
+| ID | Do | Expect |
+|---|---|---|
+| T-70 | With a macro open, press **See what is in it** | Lists what it uses, what it names and cannot find, what it does not name, and any duplicates |
+| T-71 | Read the wording on the "does not name" list | It says **"this macro does not name"**, with the caveat that the folder is shared and this macro cannot see the others. If it ever reads as *unused*, somebody will delete a picture four macros need |
+| T-72 | Look for a delete button | **There isn't one.** The list is the feature |
+| T-73 | Copy `claim.png` to `claim_copy.png` and rescan | The two are listed as the same picture |
+| T-74 | Open `claim.png` in an editor and re-save it without changing a pixel | **Still listed as a duplicate.** The comparison is on decoded pixels, not file bytes — that is exactly the duplicate people accumulate |
+| T-75 | Crop one of them by a single row and rescan | No longer a duplicate |
+| T-76 | A folder-of-variants template | Listed as used, and **not** listed as a set of duplicates of itself |
+| T-77 | Press it with ~200 templates in the folder | Takes a moment (it decodes every one) and does not freeze the window for longer than that. It happens only on the button press |
+| T-78 | **Open the folder** | Explorer opens `templates/`, creating it if it was not there |
+
+---
+
+## Driven pass — 1.8.0
+
+Sections A, C, G, H, K, Q and T were driven on 2026-08-27 against the 1.8.0 release
+build, on Windows 11, 2560×1440 at 150 %, one monitor, ru-RU layout. **48 rows have
+evidence**; the full write-up with the log lines is in the release notes.
+
+**Three defects were found and fixed by driving them**, all in code this release added
+or newly relied on: `✓`/`✗` drawing as empty boxes (which also means the package panel
+has drawn boxes since 1.6.0), the newer-file save dialog offering *Don't run it*, and a
+knowingly-saved newer file keeping its old version number. One row — T-13 — turned out
+to be wrong about the program rather than the other way round, and is corrected above.
+
+### What cannot be driven by a tool, and why — measured, not assumed
+
+    recording stopped: 0 events, 8954981 us
+
+Nine seconds of synthetic mouse movement and clicks recorded as **nothing**. `kb_proc`
+and `ms_proc` skip anything carrying `LLKHF_INJECTED` / `LLMHF_INJECTED`, and everything
+a tool can synthesise carries it — deliberately, or the recorder would record its own
+playback.
+
+So **section B, section D, the click-snipping rows (S1), the editor rows that need a
+recording to edit, and the text expander (P) cannot be driven by a tool at all.** Not
+"were not": cannot be. They need human hands, and no amount of harness work will change
+that.
+
+The opposite was also measured: hotkeys go through `RegisterHotKey`, which injected keys
+*do* reach (`hotkey 1 delivered`), so every hotkey-started path was driven — including
+the one that matters most, a run started while the window is minimised.
+
+### Still needing hands after this pass
+
+**All of B** · **all of D** · **P-11, P-15** · **S-1 … S-18** (click snipping) ·
+**F-15** · **T-6** (a real scheduled run) · **T-33** (a folder template through a
+package, on a second machine) · **T-43/T-44** driven for real by changing Windows
+display settings rather than by a crafted note · **I-9, I-11, I-16** against a real
+game HUD · **H-33** (cut at 100 %, run at 150 %).
+
+T-6 is the one to do first. The pre-flight gate was written for the unattended run, the
+gate itself was driven from the hotkey and from `--no-gui`, but nobody has yet watched a
+scheduled launch at a set time refuse a broken macro and leave the machine alone.
+
+---
+
 ## Short pass
 
 If time is short, these are the rows that cover code that is either brand new or has
-never had real input behind it. **1.5.0 first**, because none of it has been touched by
-a human at all:
+never had real input behind it. **1.8.0 first**, because none of it has been touched by
+a human at all — and because for the first time a bug in this code can stop a macro
+that would have worked:
+
+**T-4, T-6, T-8, T-9** · **T-16, T-18** · **T-23, T-27, T-30, T-32** ·
+**T-36, T-37, T-39** · **T-46, T-48** · **T-52, T-58, T-60** · **T-66, T-68** ·
+**T-71, T-74**
+
+Twenty-two rows, roughly an hour. Six of them matter more than the rest:
+
+- **T-9** — a warning that blocks a run turns a diagnostic into an obstruction. If this
+  row fails, the release is worse than 1.7.0 for everybody whose macro has a fixed
+  coordinate in it, which is most of them.
+- **T-30 / T-32** — the two ways the new rules can produce a *false* error, and a false
+  error now stands between somebody and their own macro. T-32 is a bug this release
+  found in 1.7.0 by making the check a gate; the same class of thing could hide in the
+  scale rule.
+- **T-37** — the whole point of the newer-format guard. If cancelling still writes,
+  1.8.0 destroys data that 1.7.0 merely lost.
+- **T-6** — the scheduler is the case the pre-flight was written for. A check that only
+  the button honours has not been built.
+- **T-66** — a finished run that missed a step is the quiet wrong state this whole
+  release is about.
+- **T-68** — an unreadable history after upgrading loses every run record the user has.
+
+Then the 1.5.0 set:
 
 **S-3, S-4, S-8, S-9, S-15** · **S-19, S-21, S-24, S-25** · **S-37, S-41** ·
 **S-50, S-52** · **S-56, S-58, S-64, S-68** · **S-74**
