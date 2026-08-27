@@ -27,6 +27,7 @@
 
 | | |
 |---|---|
+| 📖 **A handbook, built in** | Forty-six articles covering every panel, every button and every idea the program rests on. **F1** anywhere, or **?** in the corner — and it opens at whichever section you already had open |
 | ✅ **It says no before it starts** | Every run — button, hotkey, scheduler, `--no-gui` — goes through a pre-flight check first. A missing picture or a `Call` that leads nowhere stops the run *before* the first click instead of halfway through the night. `--check` gives the same verdict as an exit code |
 | 🔍 **Why did that step do that?** | The whole cascade, in order, with the number that decided each rung: `✖ UI Automation` → `✖ Image 0.61 / 0.85` → `✔ Window-relative`, and *recorded 812, 641 → actual 794, 655*. The program always worked this out; now it keeps it |
 | 🖥 **Where the recording was made** | Screen size, scale, monitor, front application, keyboard layout — noted at record time and compared against this machine at run time. `150 % → now 100 %` is the answer to “why is it clicking twenty pixels low today” |
@@ -72,6 +73,7 @@ rotating log file · virtual-desktop isolation · per-monitor DPI awareness.
 - [Text on screen (OCR)](#-text-on-screen-ocr)
 - [Editor](#-editor)
 - [Before and after a run](#-before-and-after-a-run)
+- [The handbook](#-the-handbook)
 - [Schedule & target window](#-schedule--target-window)
 - [Exports & extras](#-exports--extras)
 - [Themes](#-themes)
@@ -820,6 +822,42 @@ Nothing is deleted, and the wording is **"this macro does not name"** rather tha
 *"unused"*. The folder is shared by every macro on the machine and this one cannot
 see the others; a list that reads as permission is how somebody deletes a picture
 four other macros depend on.
+
+---
+
+## 📖 The handbook
+
+*New in 1.9.0.* Press **F1** anywhere, or the **?** in the bottom-right corner, or find
+it in the command palette.
+
+Forty-six articles, grouped: getting started, recording and playing, how it finds
+things, scripts, the world around the macro, checking and diagnosing, files and
+sharing. Each one says what a thing is, when to reach for it, what goes wrong and what
+to do about it — not what the control is called.
+
+Three of them were never anywhere before:
+
+- **Three ways to hit a button** — by coordinate, by picture, by element; what each
+  survives and what it does not. This is the model the whole program rests on, and
+  everything else is detail on top of it.
+- **How a macro usually gets built** — seven steps, in the order that costs the least
+  rework. The one people skip is *move the window and play it again*.
+- **When it does not find the button** — six checks in the order that finds the cause
+  fastest, starting with the two that take ten seconds.
+
+**It opens where you already were.** Every section header remembers which article it
+belongs to, so pressing **?** with **Text on screen** open opens the handbook at *Text
+on screen*.
+
+That is what let 1.9.0 remove the fifty-one paragraphs of hover text the program used
+to explain itself with. A tooltip can only answer *what is this control*; it cannot
+answer *what is this program for*, which is the question somebody looking at **Macro
+package**, **Macro library** and **Templates folder** is asking about all three at once.
+
+> The handbook is written in English and Russian — the two languages this project's own
+> documentation exists in. The other four fall back to the English text rather than to a
+> machine translation of it, and like every other string in the program it can be
+> overridden through `lang/<code>.json` without a rebuild.
 
 ---
 
