@@ -7,6 +7,78 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); version
 
 ---
 
+## [1.9.0]
+
+The release that stopped explaining itself in the margins.
+
+Until now the program described itself in fifty-one paragraphs of hover text scattered
+through the panels, ten of which were drawn permanently under their section headings.
+That had two faults, and the second is the one that mattered. The first is clutter:
+several hundred words of prose sat in the window, and nobody was reading them.
+
+The second is that a tooltip can only ever answer *what is this control*. It cannot
+answer *what is this program for*, and somebody looking at **Macro package**, **Macro
+library** and **Templates folder** for the first time is asking the second question
+about all three at once — and getting three unrelated sentences, none of which says
+that the first is for sending a macro to a person, the second for calling one from
+another macro, and the third for the pictures they both depend on.
+
+### Added
+
+- **A handbook, built in.** Forty-six articles covering every panel, every button and
+  every idea the program is built on — what a thing is, when to reach for it, what
+  goes wrong, and what to do about it. Press **?** in the bottom-right corner, or
+  **F1** anywhere, or find it in the command palette.
+
+  It is not a list of controls. Alongside the reference articles there are the ones
+  that were never anywhere: *Three ways to hit a button*, which is the mental model
+  the whole program rests on; *How a macro usually gets built*, which is the path that
+  costs the least rework; and *When it does not find the button*, which is the six
+  checks in the order that finds the cause fastest.
+
+- **It opens where you already were.** Every section header remembers which article it
+  belongs to, so pressing **?** with **Text on screen** open opens the handbook at
+  *Text on screen*. That is what makes removing the tooltips an improvement rather than
+  a loss: help at the point of need, without the point of need being covered in prose.
+
+- **Search that narrows.** Every word typed must match, not any of them — a list that
+  grows as you type is a list you cannot narrow.
+
+### Changed
+
+- **The fifty-one explanatory strings are gone**, along with the ten paragraphs drawn
+  permanently under section headings. The panels now carry labels and controls and
+  nothing else.
+
+  One of the fifty-one was not an explanation but a warning — on script steps that do
+  something irreversible. It was already duplicated by the **⚠** in the step's own
+  line, which is visible without hovering, so nothing was lost there either.
+
+- **The handbook is written in English and Russian.** Those are the two languages this
+  project's own documentation exists in. The other four fall back to the English text
+  rather than to a machine translation of it, while the interface around it stays in
+  its own language. As with every other string in the program, `lang/<code>.json` can
+  override any of it without a rebuild.
+
+### Notes
+
+- Nothing about how macros run changed in this release. The format is still 5, every
+  file loads exactly as it did, and the pre-flight check, the step traces and the run
+  summaries all behave as they did in 1.8.0.
+
+### Testing
+
+- **278 unit tests**, up from 271. The seven new ones assert that every article exists
+  in both languages and is long enough to be an explanation rather than a restated
+  label; that ids are unique and every section header points at one that exists; that
+  the markup contains only the five things it claims and balances its delimiters; that
+  the inline splitter produces the runs the renderer expects; that search requires
+  every word; that the four fallback languages really do read English while Russian
+  does not; and — the one that keeps this release honest — that **no explanatory string
+  has crept back into the interface**.
+
+---
+
 ## [1.8.0]
 
 The release about telling you what the program already knew.
