@@ -7,6 +7,110 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); version
 
 ---
 
+## [1.7.0]
+
+The release that came out of running the manual test matrix end to end.
+
+Nothing here is a new feature anyone asked for. Six things were found to be wrong by
+driving the program the way a person would - a real desktop, real synthetic input, a
+real screen to look at - and this is the release that fixes them. Two of the six had
+been wrong since 1.5.0 and were invisible precisely because they were quiet: the
+program did not crash, it just did the wrong thing once and then behaved.
+
+### Fixed
+
+- **The first image search of every run found nothing.** Desktop Duplication answers a
+  request with a cursor-only update when nothing else has moved, and that update
+  carries no desktop image at all. The guard against it read
+  `if cursor_only && we_already_have_a_frame`, which let the very first one through -
+  and the first one is the likeliest to be cursor-only, because a cursor twitch is
+  what wakes the compositor on a still screen. The black texture was copied in as
+  "the screen", and because the capture had *succeeded* the GDI fallback beneath it
+  never ran.
+
+  A macro whose first step was `Click image` with *stop the script* on a miss ended
+  on that step. The same macro inside a `Wait for` loop corrected itself on the
+  second look, which is why this survived three releases.
+
+- **A wide, short template could be found confidently in the wrong place.** The search
+  sweeps a shrunken copy of the screen first and then refines around the winner. A
+  template much wider than it is tall loses the rows that tell it apart when it
+  shrinks, so the coarse pass can prefer somewhere else entirely and the fine pass
+  never looks at the right place. Measured: a 170x32 button came back **123 px below
+  itself** with a score of **0.867** - above the default threshold of 0.85, so the
+  step reported success and `Click image` would have clicked the wrong thing.
+
+  The fine pass now gets the best four coarse candidates instead of the best one. The
+  same button is now found at its own centre, score 0.9999. Full-screen searches cost
+  about 3 % more; a silent wrong click cost rather more than that.
+
+- **A correlation score could be `NaN`.** On a window of one flat colour the sum of
+  squares and the square of the sum are the same number, and in floating point the
+  subtraction can land a whisker below zero; the square root of that is `NaN`, and
+  `NaN <= EPSILON` is false, so the guard meant to catch it passed it through. It was
+  invisible while every comparison was a `>` test - `NaN` loses those silently - and
+  surfaced the moment the code above started keeping a shortlist. Variance is clamped
+  at zero now, and the `NaN` check is spelled out.
+
+- **`Call macro` by a relative name did not work under `--no-gui`.** A `Call` step
+  resolves a bare name next to the macro that named it, and the headless path never
+  recorded which file the macro came from. It looked beside the executable and in
+  `macros/`, said so in the log, and stopped. The same macro worked in the window.
+
+- **`--no-gui` ignored almost all of the settings.** The headless path took four
+  values - repeat count, speed, absolute mouse, delay between repeats - and built
+  everything else from defaults. Twenty-four settings were quietly dropped, including
+  **the frame-rate guard, window anchoring, pause-while-not-in-front, human-like
+  movement, timing jitter, fast screen capture and the screenshot on a failed step**.
+
+  A macro set up in the window and then put into Task Scheduler behaved differently,
+  with nothing said about it. `run_headless` now applies the configuration in full and
+  the caller's four values on top, which is the order the window has always used.
+
+- **`--selftest vision` reported a capture fault that was not there.** Its
+  cross-check cuts the most contrasty square it can find from a GDI frame and looks
+  for it in a duplicated one. Contrast is not uniqueness: a square of horizontal
+  interface banding has plenty of variance and matches equally well a few pixels to
+  the left, and the test duly announced *WRONG PLACE - off by 4 px* on a machine
+  where the two paths agreed exactly. It now also compares the pixels where the
+  square was cut from, and says so when the square simply appears in more than one
+  place. A test that cries wolf about the capture path costs somebody a day.
+
+### Added
+
+- **A language for text recognition.** Under **Text on screen**: *Reads in*, listing
+  the recognisers Windows actually has installed, or the display languages as before.
+
+  It exists because the two are often not the same. On a Russian Windows reading an
+  English game, `Gems: 1,250` came back as `Gems :` with the digits lost and the zero
+  of `02:34` read as a Cyrillic **а**. No amount of pixel preparation argues a
+  recogniser out of the wrong alphabet - measured, all five preparation profiles and
+  *try each* returned the identical wrong answer. Setting the language to `en-US` on
+  the same machine reads `1,250` and hands `Read number` the 1250 it had been losing.
+
+  Stored as `ocr_lang` in `config.json`; empty means the Windows display languages,
+  which is what every version before this did and still the default.
+
+### Testing
+
+- **255 unit tests**, up from 254. The new one plants a wide, short template and a
+  decoy that shrinks to the same flat grey, and asserts the search comes back with
+  the real one.
+- **The matrix pass that produced this release** covered about 170 rows with evidence,
+  including all of section K, all of the self-running `.exe` footer, and the step-mode
+  rows nobody had touched. It also produced two findings that turned out to be the
+  test being wrong rather than the program - both are written up in `TESTING.md`,
+  because the way a measurement misleads is worth keeping.
+
+### Notes
+
+- Recording cannot be tested by a program. The recorder discards injected input on
+  purpose - otherwise it would record its own playback - and everything a script can
+  synthesise is injected. Sections B, F and the click-snipping rows still need human
+  hands.
+
+---
+
 ## [1.6.0]
 
 The release about not trusting a coordinate.
