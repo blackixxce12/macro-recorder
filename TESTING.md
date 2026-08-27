@@ -40,6 +40,157 @@ load, thread interleaving, or hour nine — which is what the rest of this was f
 | 9 | [1.5.0: the interpreter and the capture path](#stage-9--150-the-interpreter-and-the-capture-path) | 🔧 | done | 144 tests; a new interpreter harness; stage 1's last debt closed; a plan that was measurably wrong |
 | 10 | [1.6.0: harnesses that check the effect, not the flag](#stage-10--160-harnesses-that-check-the-effect-not-the-flag) | 🔧 | done | 250 tests; three new harnesses; four real bugs found, one of them an infinite loop |
 | 11 | [1.7.0: the matrix, run properly](#stage-11--170-the-matrix-run-properly) | 🖐 | done | ~170 matrix rows driven for real; six defects found and fixed; two phantoms caught before they were reported |
+| 12 | [1.8.0: saying it before it happens](#stage-12--180-saying-it-before-it-happens) | 🔧 🖐 | done | 271 tests; the pre-flight became a gate; 48 matrix rows driven; five defects found, two of them by promoting a diagnostic to a gate and three by looking at panels nobody had looked at |
+
+---
+
+## Stage 12 — 1.8.0: saying it before it happens
+
+🔧 **Result: 255 → 271 tests, 48 matrix rows driven, and five bugs — two from taking an
+existing check seriously, three from looking at panels nobody had looked at.**
+
+This release added no new capability, so there was nothing new to benchmark. The
+testing question was a different one: **what breaks when a diagnostic is promoted to a
+gate?**
+
+`health::check` had existed since 1.6.0 as a button. Nothing depended on it being
+right — a false complaint cost the reader two seconds of doubt. Putting it in front of
+the Run button changes the cost of every false positive from *mildly annoying* to
+*the macro does not run*, and that reweighting is what found both bugs below.
+
+### The two bugs, and why the promotion found them
+
+**A template kept as a folder of variants was reported missing.** `load_template_set`
+has always accepted `templates/claim/` — a folder of PNGs of the same button in
+different themes — but `template_names()`, which is what tells the checker and the
+packager what is on disk, only ever looked at `*.png` files. So the checker called a
+folder template missing, and the packager left it out of packages.
+
+Both had been wrong since folder templates were introduced, and neither had been
+noticed, because a wrong line in a panel nobody is obliged to read is not a symptom.
+As a gate it is an unrunnable macro. Now one function, `template_exists`, answers for
+the checker, the packager and the resource audit alike.
+
+**A macro from a later version loaded, lost half of itself, and saved the loss back
+over the original.** Not found by the promotion — found by reading `parse_macro` while
+writing the recursion rule, and noticing that `data.version` was never looked at.
+
+Serde discards unknown fields without a word, so such a file opens looking perfectly
+healthy; saving writes back only what this build understood. Every compatibility test
+in the project ran the other way — *does an old file still load* — and there were
+eight of them. There were none for *does a new file survive being opened*, because
+nobody had thought of the direction.
+
+The general lesson is the same one stage 11 wrote down about measurement: **the test
+you do not have is the one shaped like a question you have not asked.** Backwards
+compatibility is an obvious question. Forwards compatibility is the same question with
+the arrow reversed, and it stayed invisible for five format versions.
+
+### What is testable here and what is not
+
+Nearly all of it is a pure function, which is the point of how `health::check` was
+built in 1.6.0: it takes a macro and an `Env` describing the world, so a made-up disk
+and a made-up screen answer as well as a real one. The recursion walk, the display
+comparison, the counted checks and the format guard are all unit tests.
+
+What needed a real machine:
+
+- **The gate itself**, on all five ways a macro can start. Four of them — hotkey,
+  scheduler, queue, headless — do not go through the Play button, and a check that
+  only the button honoured would be a check that never ran on a night run. This is why
+  the gate lives in `start_playback_mode` and not beside the button.
+- **`--check`'s exit codes**, which are the whole product of that flag.
+- **The recording note**, which asks Windows about DPI, monitors and keyboard layout.
+
+`TESTING_MATRIX.md` section T covers all of it in 78 rows.
+
+### The measurement that was not needed
+
+The step trace keeps the last 64 aiming steps in memory, always, whether or not
+anything is watching — you cannot switch a diagnostic on after the thing you wanted
+explained has happened. The obvious worry is a tight `While` loop paying for a trace
+several hundred times a second.
+
+It does not, and the arithmetic says so before a benchmark does: a step that earns a
+trace has just done a UIA query (hundreds of microseconds) or an image search
+(milliseconds), and the trace is one small `Vec` and one `format!`. The ring is a
+`VecDeque` rather than a `Vec` for the same reason — not because dropping the front of
+a 64-element vector is slow, but because it is gratuitous.
+
+Worth stating rather than measuring, and worth stating **because** the measurement
+lessons of stages 9 and 10 were about the opposite mistake. Not every number needs a
+stopwatch; some need only an order of magnitude and an honest comparison against what
+it sits next to.
+
+
+### The driven pass, and what it cost the release
+
+Sections A, C, G, H, K, Q and T were then driven for real against the release build.
+**48 rows have evidence.** Three more defects came out of it, and all three are the
+same shape: *code nobody had ever looked at with human eyes*.
+
+**Two glyphs that have never drawn.** `✓` (U+2713) and `✗` (U+2717) are not in the
+bundled font and render as empty boxes. Both had been in `ALLOWED_SYMBOLS` since
+1.6.0 — the list the glyph test checks against, curated by hand — so the test
+positively blessed them. The panels that used them were never viewed, because their
+matrix rows had never been driven, so the package dependency list has shown
+`□ claim.png` instead of a tick for two releases.
+
+The test was not wrong to exist; it was wrong about what it could know. A hand-curated
+allow-list cannot tell you whether a glyph is in a font — it can only tell you whether
+somebody once said it was. The two are struck off, so the test now *catches* them.
+
+**A cancel button answering the wrong question**, and **a knowingly-saved newer file
+keeping its old version number** — both in the newer-format guard, both in the half of
+it that only a person clicking through the dialog would ever see. The second is the
+more interesting: the guard exists to stop a file whose label disagrees with its
+contents, and the fix path was writing one.
+
+### The lesson this stage adds to the campaign
+
+Stage 11's lesson was about being fooled by your own measurement. This one is narrower
+and, in this project, more expensive:
+
+**A check nobody depends on is a check nobody has verified.** `health::check` had
+sixteen unit tests and a panel, and it was still reporting folder templates as missing,
+because nothing was riding on the answer. The moment the Run button started riding on
+it, the fault surfaced in a day. The same is true of the glyphs: `ALLOWED_SYMBOLS`
+passed for two releases because nothing looked at what it permitted.
+
+The practical form of it: when a diagnostic is promoted to a gate, re-test the
+diagnostic as though it were new code — because for the purposes of everything that now
+depends on it, it is.
+
+### Numbers
+
+| Gate | 1.7.0 | 1.8.0 |
+|---|---|---|
+| unit tests | 255 | **271** |
+| `--selftest dryrun` | 10 checks, 0 failed | 10 checks, 0 failed |
+| `--selftest target` | 8 checks, 0 failed | 8 checks, 0 failed |
+| `--selftest recovery` | 6 checks, 0 failed | 6 checks, 0 failed |
+| `--selftest script=500` | 12 checks, 0 failed | 12 checks, 0 failed |
+| `--selftest simd` | 4 kernels, 0 disagreements | 4 kernels, 0 disagreements |
+| `--selftest churn=120` | held 0, peak 1 | 10 738 transitions, held 0, peak 1 |
+| `--selftest timing` | no drift, burst ≤ 1 | no drift, burst ≤ 1 |
+| matrix rows | ~170 covered | +78 written, **48 driven** |
+| release `.exe` | 10 256 384 B | 10 437 632 B (+177 KB) |
+
+The sixteen new unit tests are, in order of what they would have caught: a file from a
+later version being noticed and not relabelled; an older file written back at the
+current format; the recording note surviving a round trip while `from_future` never
+reaches the disk; DPI read as the percentage Windows shows; a macro that calls itself;
+a three-macro ring; a diamond that is *not* a cycle; a disabled `Call` that cannot make
+one; the recogniser-language warning said once for nine steps; a changed display
+mentioned for a flat recording and not for an image-aimed one; the passed-checks counts
+being per picture rather than per step; a run record carrying its effort while a
+pre-1.8.0 line still loads; and text clipping counted in characters — which is what
+stops a Cyrillic screen reading from panicking a `format!`.
+
+Three of those exist because writing the rule made the opposite case obvious. The
+diamond test (T-23's unit twin) is the important one: a cycle detector that calls every
+shared subroutine a cycle would have made this release unusable for anybody who factors
+their macros, which is exactly the user this feature is for.
 
 ---
 
@@ -204,7 +355,7 @@ inverted: an allowlist of every symbol character in the file, each one having be
 looked at in the running window.
 
 The first attempt at that allowlist was still too narrow — it scanned the six
-language tables, and the ✓ / ■ / ✗ marks beside a run in the run history are built
+language tables, and the ✔ / ■ / ✖ marks beside a run in the run history are built
 in `Run::headline`, which never goes near them. That mark had been an empty box as
 well. The scan is now over the whole source file, comments included: constraining a
 comment's em dash costs nothing and removes the question of which literals count as
