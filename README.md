@@ -630,7 +630,9 @@ element  →  picture  →  text  →  fixed coordinates
 
 ## 🔤 Text on screen (OCR)
 
-Under **🔤 Text on screen**. It uses `Windows.Media.Ocr` — the recognition engine already installed with Windows — so there are **no models to download**. If your game isn't in English, add that language pack in Windows Settings and the engine picks it up automatically.
+Under **🔤 Text on screen**. It uses `Windows.Media.Ocr` — the recognition engine already installed with Windows — so there are **no models to download**.
+
+**Pick the language you are reading, not the one Windows is in.** The *Reads in* dropdown lists the recognisers your Windows actually has; leave it on *the Windows languages* to keep the old behaviour. This matters more than it sounds: on a Russian Windows reading an English game, `Gems: 1,250` came back as `Gems :` with the digits lost, and the zero of `02:34` was read as a Cyrillic **а**. No amount of pixel preparation argues a recogniser out of the wrong alphabet — all five profiles returned the same wrong answer. Setting it to `en-US` on the same machine read `1,250` correctly. To add a language, install its pack in Windows Settings and restart the app.
 
 1. Press **🎯 Pick in 3 s**, hover the **top-left** corner of the region, wait for the countdown, then hover the **bottom-right** corner.
 2. The rectangle is captured and read immediately, so you can see exactly what the engine sees.
@@ -1125,7 +1127,7 @@ Borderless/windowed-fullscreen works best. Exclusive fullscreen and raw-input ga
 `.json` while you're iterating — you can read and edit it. `.mrz` for long recordings you just want to keep: same data, roughly 20–40× smaller.
 
 **Which language does OCR read?**
-Whatever language packs Windows has installed. Add one in *Settings → Time & language* and restart the app.
+Whatever language packs Windows has installed. Add one in *Settings → Time & language*, restart the app, then pick it under **🔤 Text on screen → Reads in** — the recogniser reads in the language you choose there, not the one Windows is displayed in.
 
 ---
 
