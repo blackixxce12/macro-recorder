@@ -27,6 +27,9 @@
 
 | | |
 |---|---|
+| ✅ **It says no before it starts** | Every run — button, hotkey, scheduler, `--no-gui` — goes through a pre-flight check first. A missing picture or a `Call` that leads nowhere stops the run *before* the first click instead of halfway through the night. `--check` gives the same verdict as an exit code |
+| 🔍 **Why did that step do that?** | The whole cascade, in order, with the number that decided each rung: `✖ UI Automation` → `✖ Image 0.61 / 0.85` → `✔ Window-relative`, and *recorded 812, 641 → actual 794, 655*. The program always worked this out; now it keeps it |
+| 🖥 **Where the recording was made** | Screen size, scale, monitor, front application, keyboard layout — noted at record time and compared against this machine at run time. `150 % → now 100 %` is the answer to “why is it clicking twenty pixels low today” |
 | 📸 **Record straight into pictures** | Tick one box and every click keeps a small square of the screen. Stop recording and it offers to turn those clicks into steps that find the button **wherever it has moved to** — the keystrokes and timing between them untouched |
 | ⚠️ **A step that finds nothing can say so** | Carry on, stop the script, leave the loop, or try again *N* times. Before 1.5.0 there was only the first, which is how a night macro ends up clicking at an empty desktop until morning |
 | 🧠 **Script engine** | 24 step kinds with `If` / `While` / `Break`, variables that hold numbers **or text**, eight conditions that look at the screen, and **`Call macro`** for reuse. **[Full guide → SCRIPTS.md](SCRIPTS.md)** |
@@ -48,7 +51,7 @@
 
 Pause/resume with a proper schedule clock · 7 rebindable hotkeys + emergency stop · X1/X2 capture ·
 Open/Save dialogs and recent files · gzip `.mrz` macros · shutdown/restart/sleep/hibernate/log-off ·
-headless CLI · Fluent (Mica) theme · 9 themes · 6 languages · timing jitter · single instance ·
+headless CLI with a pre-flight gate · Fluent (Mica) theme · 9 themes · 6 languages · timing jitter · single instance ·
 rotating log file · virtual-desktop isolation · per-monitor DPI awareness.
 
 </details>
@@ -68,6 +71,7 @@ rotating log file · virtual-desktop isolation · per-monitor DPI awareness.
 - [UI Automation](#-ui-automation)
 - [Text on screen (OCR)](#-text-on-screen-ocr)
 - [Editor](#-editor)
+- [Before and after a run](#-before-and-after-a-run)
 - [Schedule & target window](#-schedule--target-window)
 - [Exports & extras](#-exports--extras)
 - [Themes](#-themes)
@@ -117,7 +121,7 @@ That weekend project got slightly out of hand. 🦀
 | **Single .exe** | No installer, no .NET, no Python runtime — one file, double-click, done |
 | **Fearless concurrency** | Five roles run in parallel — low-level hooks, an event collector, a microsecond-accurate replay engine, a scheduler and the GPU-rendered UI — and the compiler guarantees they don't corrupt each other's state |
 | **Memory safety** | A tool that injects input into your system shouldn't scribble over an event buffer mid-raid. Outside the thin `unsafe` Win32 FFI layer, Rust makes whole classes of bugs impossible |
-| **Small & instant** | With `opt-level = 3` + LTO + `strip`, the whole app is a few MB and starts instantly |
+| **Small & instant** | With `opt-level = 3` + LTO + `strip`, the whole app is one ~10 MB file and starts instantly |
 | **Honest reason** | I wanted a real excuse to learn Rust properly. Best way to learn — build something you actually use |
 
 ---
@@ -132,7 +136,7 @@ That weekend project got slightly out of hand. 🦀
 |---|---|
 | You need the smallest possible footprint (36 KB) | You want timed playback, pause/resume and power actions |
 | You need to run on Windows XP / Vista / 7 | You're on Windows 10 / 11 with DPI scaling or multiple monitors |
-| You want a 36 KB tool that also compiles macros to 60 KB executables | You want a macro that reacts to the screen instead of clicking blind |
+| You want a 36 KB tool that also compiles macros to 60 KB executables (ours are ~10 MB) | You want a macro that reacts to the screen instead of clicking blind |
 | You want a tool that has been battle-tested for over a decade | You want open source you can audit, fork and extend |
 | You just need "record → play", nothing more | You want an editor, conditions, image search, OCR and a scheduler |
 
@@ -142,7 +146,7 @@ That weekend project got slightly out of hand. 🦀
 |---|---|---|
 | **License** | Freeware, **closed source** (proprietary) | **MIT, fully open source** |
 | **Implementation** | Pure C + raw Win32, self-contained **32-bit** exe | Rust 2024 + `windows-rs`, **64-bit** exe |
-| **Binary size** | **~36 KB** 🏆 | ≈5 MB (GPU UI, 9 themes, 6 translations, vision + OCR) |
+| **Binary size** | **~36 KB** 🏆 | ≈10 MB (GPU UI, 9 themes, 6 translations, vision + OCR, four SIMD kernels) |
 | **Install** | Portable single exe (optional Inno Setup installer) | Portable single exe |
 | **Supported Windows** | **XP → 11** 🏆 | 10 / 11 (Windows 11 for Mica/Acrylic + virtual desktops) |
 | **UI** | Fixed Win32 toolbar, user-swappable toolbar bitmaps | GPU-rendered `egui`, **9 themes**, live theme switching |
@@ -171,7 +175,7 @@ That weekend project got slightly out of hand. 🦀
 | **Macro format** | Proprietary binary `.rec` | **Plain JSON** with µs timestamps, optional gzip (`.mrz`) |
 | **Edit a recording** | ❌ in the classic build (a "With Editor" build exists on the official site) | ✅ **built-in editor** (3 views + inspector) + any text editor |
 | **Open / Save dialogs, recent files** | ✅ open & save | ✅ + a recent-files list |
-| **Compile macro → standalone .exe** | ✅ ~60 KB output 🏆 | ✅ ~5 MB output (a copy of this exe + the macro **and its script**) |
+| **Compile macro → standalone .exe** | ✅ ~60 KB output 🏆 | ✅ ~10 MB output (a copy of this exe + the macro **and its script**) |
 | **Export to another tool** | ❌ | ✅ **AutoHotkey v2 script** (events only) |
 | **Tray icon / minimize to tray** | ❌ | ✅ with a record / play / stop menu |
 | **Window anchoring** | ❌ | ✅ follows the target window if it moved **or resized** |
@@ -198,7 +202,7 @@ That weekend project got slightly out of hand. 🦀
 Credit where it's due — two things TinyTask does that this project cannot:
 
 1. **Size and reach.** 36 KB, 32-bit, runs on Windows XP. Its compiled macros are ~60 KB;
-   ours are a ~5 MB copy of this executable, because the player *is* the whole app.
+   ours are a ~10 MB copy of this executable, because the player *is* the whole app.
    If you need to email a macro to someone on an old machine, TinyTask wins outright.
 2. **A decade of field testing.** TinyTask has been used by an enormous number of people for
    many years. Macro Recorder is young — please [file issues](../../issues).
@@ -698,6 +702,127 @@ The editor is disabled while recording or playing.
 
 ---
 
+## 🩺 Before and after a run
+
+*New in 1.8.0.* None of this is a new thing a macro can do. All four are facts the
+program already worked out, used to decide something, and then threw away.
+
+### ✅ The pre-flight check
+
+The check has existed since 1.6.0 as a button. It is now what happens when a macro
+starts — from the Play button, the hotkey, the scheduler, the queue or `--no-gui`
+alike, because a check only the button honoured would be a check that never ran on
+the night runs it was written for.
+
+```
+✔ 42 steps checked
+✔ 3 pictures found
+✔ 2 called macros found
+✔ no recursive calls
+✔ every block closes, every step is reachable
+⚠ #17 fixed coordinates: 812, 641
+⚠ #24 reads text, and no recogniser language is set
+✖ #31 picture file is missing: claim_button
+```
+
+**Errors stop the run; warnings do not.** A fixed coordinate is a habit worth
+mentioning, not a reason to stand between you and your own macro. An error means the
+macro *will* misbehave — and in the window you still get **Run it anyway**.
+
+A rehearsal (*Test run*) is exempt on purpose: trying a macro you already suspect is
+broken is exactly what a rehearsal is for, and it sends no input.
+
+Three rules are new in 1.8.0 — a **recursive `Call`** (which the interpreter used to
+survive by giving up eight levels deep, having done seven levels' worth of clicking
+first), **reading text with no recogniser language set**, and **a display that is not
+the one this was recorded on**. The last only fires where something positional was
+actually recorded: templates carry the scale they were cut at, so a macro that aims
+by picture is indifferent to it.
+
+The `✔` lines are new too. A list of complaints structurally cannot tell *nothing is
+wrong* from *nothing was checked*, and at one in the morning those are very different
+pieces of news.
+
+See [`--check`](#--check-is-this-macro-fit-to-run) for the same verdict as an exit
+code.
+
+### 🖥 Where the recording was made
+
+Turn on **Note the display and the front window** under *Recording* and each
+recording writes down the screen size, the scale, which monitor of how many, the
+application in front, its window, and the keyboard layout.
+
+Nothing replays from any of it. The point is the comparison: every row that differs
+from this machine, right now, is shown as `150 % → now 100 %` — which turns *"why
+does this macro click twenty pixels low today?"* from a bisect into a glance.
+
+It goes inside the macro file, which is why there is a switch: the front window's
+title and its executable name are in there, and a macro is a thing people send each
+other.
+
+### 🔍 Why a step did that
+
+Every rung of the cascade that was tried, in order, with the number that decided it:
+
+```
+STEP 27   Click target "Claim"
+
+✖ UI Automation    —  nothing found          (2 ms)
+✖ Image            —  0.610 / 0.85          (41 ms)
+✔ Point in window  —  Roblox                 (0 ms)
+
+Where:  recorded 812, 641 → actual 794, 655   (-18, +14)
+Took: 43 ms   Cycle: 7
+```
+
+The score was in `match_score` whether the picture matched or not, and the resolver
+walked the rungs to pick one — all that was missing was not discarding the losers.
+The last 64 steps that aimed at something are kept **always**, watched or not: you
+cannot switch this on after the thing you wanted explained has already happened.
+
+### 📈 What a run had to do
+
+The run history now records, per run: fallback resolutions, extra OCR preparation
+passes, recovery blocks entered, milliseconds spent inside them, and steps that
+missed.
+
+```
+✔ 2026-08-27 03:42
+42 loop(s), 3 min 4 s
+How hard it worked:
+  · 3 × found the second way
+  · 2 × extra reading pass
+  · 1 × recovery block
+  · 184 ms in recovery
+42 steps run
+```
+
+*Completed* was never the whole answer. A run that finished having fallen back three
+times, read the screen twice more than it meant to and gone through a recovery block
+is a macro that is about to stop finishing — and it looked exactly like a healthy
+one. A run whose every miss policy says *carry on* finishes, and finishing is not the
+same as having worked.
+
+Counts, and deliberately **no second score out of a hundred**. Every line here is
+something the program observed. A number would be an opinion, and an opinion shaped
+like the pre-flight score — which measures something else entirely — would invite a
+comparison that means nothing.
+
+### 📂 The templates folder
+
+**Macro → Templates folder → See what is in it** lists the pictures this macro uses,
+the ones it names that are not there, the ones nothing in it names, and the ones that
+are the same image saved twice — compared by decoded pixels rather than file bytes,
+because the duplicate people actually accumulate is the same crop re-saved by a
+different editor.
+
+Nothing is deleted, and the wording is **"this macro does not name"** rather than
+*"unused"*. The folder is shared by every macro on the machine and this one cannot
+see the others; a list that reads as permission is how somebody deletes a picture
+four other macros depend on.
+
+---
+
 ## 📅 Schedule & target window
 
 **📅 Schedule** — tick *Start at a set time*, choose `HH:MM` and the weekdays. A dedicated thread checks every 5 seconds, so it fires even when the window is minimised to the tray and no longer painting. If a recording or playback is already running at that minute, the launch is skipped and logged rather than stacked.
@@ -809,15 +934,25 @@ The app picks its data folder at startup and shows the result under **📁 Files
     └── macro-recorder.log.YYYY-MM-DD
 ```
 
-### `macro.json` — the recording (format v3)
+### `macro.json` — the recording (format v5)
 
 `t_us` is microseconds since the recording started; `kind` is an externally-tagged enum. `duration_us` is the full length of the recording **including trailing idle time**, which is what makes a "do stuff, then wait 5 seconds" macro loop correctly.
 
 ```json
 {
-  "version": 3,
+  "version": 5,
   "duration_us": 8000000,
   "anchor": { "title": "Roblox", "x": 100, "y": 80, "w": 1280, "h": 720 },
+  "recorded": {
+    "when": "2026-08-27 11:42",
+    "screen_w": 2560, "screen_h": 1600,
+    "dpi": 144, "monitors": 2, "monitor": 2,
+    "process": "RobloxPlayerBeta.exe",
+    "window": "Roblox",
+    "window_rect": [100, 80, 1280, 720],
+    "layout": "en-US",
+    "app": "Macro Recorder 1.8.0"
+  },
   "events": [
     { "t_us": 0,      "kind": { "MouseMove":   { "x": 960, "y": 540, "dx": 0, "dy": 0 } } },
     { "t_us": 128340, "kind": { "MouseButton": { "button": "Left", "down": true,  "x": 960, "y": 540 } } },
@@ -838,7 +973,8 @@ The app picks its data folder at startup and shows the result under **📁 Files
 
 | Field | Meaning |
 |---|---|
-| `version` | `3` — adds `script` and `vars`; v1 and v2 files still load |
+| `version` | `5` — adds `recorded`; v1 to v4 files still load and are written back at 5 |
+| `recorded` | What the machine was doing when the recording was made. **Nothing replays from it** — it exists so the pre-flight can say *“recorded at 150 %, this screen is 100 %”*. Absent when the **Note the display and the front window** box is off, and from every file written before 1.8.0 |
 | `t_us` | Timestamp in microseconds from the start of the recording |
 | `anchor` | Title and rectangle of the window that was in front when recording started (optional) |
 | `Key.vk` / `Key.scan` | Virtual-key code and hardware scancode. **Scancode wins on replay** when non-zero — that's what makes games and non-US layouts behave |
@@ -851,7 +987,11 @@ The app picks its data folder at startup and shows the result under **📁 Files
 | `script` | The program. Empty (or all steps disabled) means "just replay the events" |
 | `vars` | Starting values for the script's variables. Anything unset starts at `0` |
 
-**Compatibility:** version 1 files (a bare `[ … ]` array) and version 2 files still load. **Compression:** saving with a `.mrz` (or `.gz`) extension writes gzipped compact JSON, typically 20–40× smaller; both extensions load transparently.
+**Compatibility:** version 1 files (a bare `[ … ]` array) through version 4 all still load, and are written back at version 5 with no change in how they behave.
+
+**Reading forwards** is guarded as of 1.8.0. A file claiming a format this build does not know still loads — most of it will work — but everything new in it has already been discarded by then, so the load says so and **saving over it puts up a dialog naming both formats**. Before 1.8.0 that file opened looking healthy and was silently written back halved.
+
+**Compression:** saving with a `.mrz` (or `.gz`) extension writes gzipped compact JSON, typically 20–40× smaller; both extensions load transparently.
 
 **Validation on load:** unbalanced script blocks, an empty file, or more than 4 000 000 events are rejected with a message. Out-of-order timestamps are sorted rather than rejected.
 
@@ -947,12 +1087,52 @@ macro-recorder [OPTIONS]
   -n, --loops <N>      Repeat count (0 = infinite)
   -s, --speed <X>      Playback speed multiplier (0.05 - 10.0)
       --no-gui         Play the macro headless and exit
+      --check          Check --play <FILE> and exit without running it
+      --no-check       Let --no-gui start despite a failed pre-flight check
       --simd <SET>     Pin the image-search kernel: auto (default), scalar,
                        sse2, avx, avx2, avx512. The -C target-cpu spellings
                        work too (x86-64-v3, znver3, …)
   -h, --help           Show this help
   -V, --version        Show the version
 ```
+
+### `--check`: is this macro fit to run?
+
+Checks the macro and exits without sending a single click. **0** if it is fit to run,
+**1** if it is not, **2** if the file could not be read at all. Warnings print and do
+not change the code.
+
+```powershell
+macro-recorder.exe --play "D:\macros\farm.mrz" --check
+```
+
+```
+D:\macros\farm.mrz
+  ✔ 42 steps checked
+  ✔ 3 pictures found
+  ✔ 2 called macros found
+  ✔ no recursive calls
+  ✔ every block closes, every step is reachable
+  ⚠ #17 a fixed screen coordinate: 812, 641
+  ⚠ #24 reads text, and no recogniser language is set
+  92/100
+  It can: mouse, keyboard, screen, text recognition, UI Automation
+```
+
+This is the half a window cannot provide. A macro in Task Scheduler runs at four in
+the morning with nobody to read a panel, and the failure people actually hit — a
+template renamed, a called macro moved — is knowable in a tenth of a second before
+any input is sent. Put it in front of the real run and the night's work either
+happens or does not, instead of happening halfway:
+
+```powershell
+macro-recorder.exe --play farm.mrz --check
+if ($LASTEXITCODE -eq 0) { macro-recorder.exe --play farm.mrz --loops 20 --no-gui }
+```
+
+`--no-gui` runs the same check by itself and refuses to start when it finds an error,
+so the two-line form above is only needed when you want to do something else with the
+verdict. `--no-check` starts anyway; the check still runs and is still logged.
 
 `--simd` exists to answer a question, not to be needed. Leave it at `auto` and the
 program reads CPUID and picks; set it to a narrower kernel to see what a machine
@@ -1010,7 +1190,7 @@ Grab the latest `.exe` from the **[Releases](../../releases)** page. No installa
 
 | File | Requires | Notes |
 |---|---|---|
-| `MacroRecorder.exe` | Any x86-64 CPU | One build. Picks its own instruction set at start-up |
+| `MacroRecorder.exe` | Any x86-64 CPU | One build, ~10 MB. Picks its own instruction set at start-up |
 
 There is no longer a separate `.v3.exe`. The image search — the one hot loop where
 the instruction set is worth anything — is compiled **four times into the same
@@ -1073,7 +1253,7 @@ Honest list — please read before filing a bug:
 | **Pausing drops a drag in progress** | Held keys and buttons are released when you pause, so a macro paused mid-drag resumes without the drag |
 | **One macro at a time** | Open/Save, recent files and profiles, but no tabs or queue |
 | ~~**`Play events` ranges are still indices**~~ | **Fixed in 1.6.0.** Put markers down and tick *Use markers*, and the range follows your edits. The numbers stay visible underneath, and **Check macro** still catches a numbered range that no longer fits |
-| **Exported `.exe` is ~5 MB** | The player is a copy of the whole app. TinyTask's ~60 KB output is smaller by design |
+| **Exported `.exe` is ~10 MB** | The player is a copy of the whole app. TinyTask's ~60 KB output is smaller by design |
 | **Templates aren't embedded** | An exported `.exe` that searches for images needs the `templates/` folder beside it |
 | **AHK export ignores scripts** | Only recorded events are translated — conditions, loops and variables are not |
 | **Scripted playback skips some flat-replay features** | Timing jitter, the global pixel stop condition and the end-of-run power action apply to flat replay only. Inside a script use a `pixel` condition and the `Quit the app` step instead |
@@ -1105,8 +1285,8 @@ No. Record → Play works with no script at all, exactly like TinyTask. Scripts 
 **My script clicks the wrong place / never finds the image.**
 Lower the confidence a little (0.85 → 0.75), re-snip the template *without* the shadow or the animated part around it, and check that the game is at the same resolution as when you snipped. The [troubleshooting table in SCRIPTS.md](SCRIPTS.md) covers this in detail.
 
-**Why is it 5 MB when TinyTask is 36 KB?**
-Because it ships a GPU-accelerated UI toolkit, 9 themes, 6 translations, a template matcher and a power/DPI/virtual-desktop layer. Different trade-off, on purpose. If size is your priority, TinyTask is genuinely the better answer.
+**Why is it 10 MB when TinyTask is 36 KB?**
+Because it ships a GPU-accelerated UI toolkit, 9 themes, 6 translations, a template matcher, a power/DPI/virtual-desktop layer, and the image-search kernel compiled four times over for four instruction sets. Different trade-off, on purpose. If size is your priority, TinyTask is genuinely the better answer.
 
 **Where did my `config.json` go?**
 Next to the exe if that folder is writable, otherwise `%APPDATA%\MacroRecorder\`. The app prints the exact path under **📁 Files**.
