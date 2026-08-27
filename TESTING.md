@@ -35,10 +35,82 @@ load, thread interleaving, or hour nine — which is what the rest of this was f
 | 4 | [Vision and OCR benchmark](#stage-4--vision-and-ocr-benchmark) | 🔧 | done | A 7× performance bug found and fixed |
 | 5 | [Concurrency churn](#stage-5--concurrency-churn) | 🔧 | done | 33 000 transitions, nothing left held |
 | 6 | [Long-run soak](#stage-6--long-run-soak) | 🔧 | done | 2.5 h, handles flat, memory settled |
-| 7 | [Feature matrix](#stage-7--feature-matrix) | 🖐 | **outstanding** | The checklist exists: [TESTING_MATRIX.md](TESTING_MATRIX.md), 130 rows + 1.5.0's |
+| 7 | [Feature matrix](#stage-7--feature-matrix) | 🖐 | **mostly done** | ~170 rows covered in 1.7.0 (stage 11). Recording, a real game and a second monitor still need hands |
 | 8 | [1.4.0 regression suite](#stage-8--140-regression-suite) | 🔧 | done | 128 tests, all green; two performance regressions caught before release |
 | 9 | [1.5.0: the interpreter and the capture path](#stage-9--150-the-interpreter-and-the-capture-path) | 🔧 | done | 144 tests; a new interpreter harness; stage 1's last debt closed; a plan that was measurably wrong |
 | 10 | [1.6.0: harnesses that check the effect, not the flag](#stage-10--160-harnesses-that-check-the-effect-not-the-flag) | 🔧 | done | 250 tests; three new harnesses; four real bugs found, one of them an infinite loop |
+| 11 | [1.7.0: the matrix, run properly](#stage-11--170-the-matrix-run-properly) | 🖐 | done | ~170 matrix rows driven for real; six defects found and fixed; two phantoms caught before they were reported |
+
+---
+
+## Stage 11 — 1.7.0: the matrix, run properly
+
+🔧 **Result: six defects found and fixed, and two lessons about being fooled by your
+own measurement.**
+
+Stages 2 to 10 were run dry or by unit test. This one drove the program the way a
+person does: a real desktop, real synthetic input reaching Windows, and a real screen
+to look at. About 170 rows of `TESTING_MATRIX.md` were covered with evidence.
+
+### What it found
+
+| | How it showed up |
+|---|---|
+| first image search of every run blank | `x=0 y=0 score=0` on call #0, correct on #1-#3, in four runs out of four |
+| a 170×32 button found 123 px away | (1711,309) score **0.867** — above the 0.85 threshold, so no miss was reported |
+| a correlation score of `NaN` | invisible until a shortlist replaced a `>` comparison; `NaN` loses those silently |
+| `Call` by relative name dead headless | the log listed every path it tried, and the macro's own folder was not among them |
+| `--no-gui` ignoring 24 of 28 settings | 20 searches took the same time with fast capture on and off, when it should be 6× |
+| the vision self-test crying wolf | *WRONG PLACE, off by 4 px* on a machine where an independent check showed 0 px |
+
+### The two that were the test's fault, not the program's
+
+Worth keeping, because both are the same shape and both nearly went into a bug report.
+
+**A template cut from a region without unique structure matches everywhere.** The
+duplication cross-check cuts the most *contrasty* square it can find — and contrast is
+not uniqueness. A square of horizontal interface banding has a fine variance and
+matches equally well four pixels to the left, so the test reported a capture fault
+that did not exist. The same mistake produced a phantom in the `--selftest simd`
+haystack earlier in this project: per-pixel noise looks maximally distinctive and
+averages to flat grey the moment the coarse pass shrinks it.
+
+**A "controlled" A/B is only controlled if the thing you did not change really did not
+change.** The debug overlay was reported as blocking clicks to the program's own
+window: the same click at the same coordinate moved 1370 pixels with the overlay off
+and 7 with it on, twice, with a fresh process each time. It was wrong. Clicking a
+checkbox and a section header with the overlay on both work — the earlier coordinate
+had simply landed on a gap in that particular panel state. Two numbers that differ by
+200× can still be measuring two different things.
+
+The rule both point at: before calling something a defect, reproduce it by a route
+that shares as little as possible with the route that found it.
+
+### What a program cannot test here
+
+The recorder discards injected input on purpose — otherwise it would record its own
+playback — and everything a script can synthesise is injected: `recording stopped:
+0 events`. Section B, all of the editor rows, the click-snipping rows and the text
+expander need human hands. The way round it for everything else was to write macro
+files directly and check what playback did.
+
+### Numbers
+
+| Gate | 1.6.0 | 1.7.0 |
+|---|---|---|
+| unit tests | 254 | **255** |
+| `--selftest dryrun` | 10 checks, 0 failed | 10 checks, 0 failed |
+| `--selftest target` | 8 checks, 0 failed | 8 checks, 0 failed |
+| `--selftest recovery` | 6 checks, 0 failed | 6 checks, 0 failed |
+| `--selftest script=500` | 12 checks, 0 failed | 12 checks, 0 failed |
+| `--selftest simd` | 4 kernels, 0 disagreements | 4 kernels, 0 disagreements |
+| `--selftest churn=120` | 10 721 transitions, held 0 | held 0, peak 1 |
+| 20 full-screen searches | 634 ms | 655 ms (+3 %, four coarse candidates) |
+| release `.exe` | 10 229 248 B | 10 256 384 B |
+
+The 3 % is what the wide-template fix costs, and the +27 KB is that plus the language
+picker. Both are the sort of price worth paying for a click that lands where it was
+aimed.
 
 ---
 
