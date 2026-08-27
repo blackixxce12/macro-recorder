@@ -7,6 +7,200 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); version
 
 ---
 
+## [1.8.0]
+
+The release about telling you what the program already knew.
+
+Nothing here is a new thing a macro can do. Every feature in it is a fact the
+program had worked out, used to make a decision, and then thrown away — the rungs
+of a cascade that failed before the one that worked, the machine a recording was
+made on, the pictures in the folder nothing asks for, the number of times a run had
+to fall back on its second choice. 1.7.0 came out of a test matrix that kept finding
+*quiet wrong states*: things that did not crash, did the wrong thing once, and
+behaved. This release is the answer to that class of fault — say it out loud, before
+the run where possible and after it where not.
+
+### Added
+
+- **The pre-flight check now stands in front of the Run button.** `health::check`
+  has existed since 1.6.0 as a button somebody could press. It is now what happens
+  when a macro starts, wherever it starts from — the Play button, the hotkey, the
+  scheduler, the queue, `--no-gui`. Errors stop the run and warnings do not, which
+  is the same rule everywhere; in the window the refusal is a dialog with **Run it
+  anyway**, and where there is no window it is a refusal and a log line.
+
+  A rehearsal is exempt on purpose. Trying a macro you already suspect is broken is
+  exactly what a rehearsal is for, and it sends no input.
+
+- **`--check`.** Checks the macro named by `--play` and exits without running a step
+  of it: **0** if it is fit to run, **1** if it is not, **2** if the file could not
+  be read. Warnings print and do not change the code.
+
+  This is the half the window cannot provide. A macro in Task Scheduler runs at four
+  in the morning with nobody to read a panel, and the failure people actually hit —
+  a template renamed, a called macro moved — is knowable in a tenth of a second
+  before any input is sent. Put this in front of the real run and the night's work
+  either happens or does not happen, instead of happening halfway.
+
+  `--no-check` lets a headless run start anyway. The check still runs and is still
+  logged; the point is to have said so, not to have won the argument.
+
+- **Three new rules, and the checks that passed.**
+  - **A recursive `Call`** — a chain that comes back to a macro already on it. The
+    interpreter has always survived this by giving up eight deep, which means doing
+    the first seven levels' worth of clicking first.
+  - **Reading text with no recogniser language set** — the fault 1.7.0 documented and
+    could not warn about. Said once for the macro, not once per step.
+  - **A display that is not the one this was recorded on** — scale or size, and only
+    where something positional was actually recorded. A macro that aims by element or
+    by picture is indifferent to the scale, and telling its author about a resolution
+    change would be telling them about the weather.
+
+  The report also now says what it *looked at*: `✔ 42 steps checked`,
+  `✔ 3 pictures found`, `✔ 2 called macros found`, `✔ no recursive calls`,
+  `✔ every block closes, every step is reachable`. A list of complaints cannot tell
+  "nothing is wrong" from "nothing was checked", and those are different news at one
+  in the morning. Deliberately not a third severity: these are not findings, and
+  giving them a colour and a weight in the score would fill the report with forty
+  lines saying nothing happened.
+
+- **Format 5: where a recording was made.** Each recording now notes the screen size,
+  the scale, which monitor of how many, the application in front, its window, and the
+  keyboard layout. Nothing replays from any of it.
+
+  The comparison is the feature. Every row that differs from this machine, right now,
+  is coloured and shown as `150 % → now 100 %` — which turns *"why does this macro
+  click twenty pixels low today?"* from a bisect into a glance. The same comparison
+  feeds the pre-flight rule above.
+
+  Off switch under **Recording**, because it goes into the macro file and a macro is
+  a thing people send each other: the front window's title and its executable name
+  are in there.
+
+- **"Why a step did that".** The whole cascade, in order, with the number that decided
+  each rung:
+
+  ```
+  ✖ UI Automation  —  nothing found        (2 ms)
+  ✖ Image          —  0.610 / 0.85        (41 ms)
+  ✔ Window-relative —  Roblox              (0 ms)
+
+  Where:  recorded 812, 641 → actual 794, 655  (-18, +14)
+  Took: 43 ms   Cycle: 7
+  ```
+
+  Every number in that block was already computed — the score is in `match_score`
+  whether the picture matched or not, and the resolver walked the rungs to pick one.
+  All that was missing was not discarding the ones that lost. The last 64 steps that
+  aimed at something are kept, always, whether or not anything is watching: you
+  cannot switch this on after the thing you wanted to explain has happened.
+
+- **What a run had to do, beside what it did.** The history now records, per run:
+  fallback resolutions, extra OCR preparation passes, recovery blocks entered, the
+  milliseconds spent inside them, and steps that missed.
+
+  `Completed` was never the whole answer. A run that finished having fallen back
+  three times, read the screen twice more than it meant to and gone through a
+  recovery block is a macro that is about to stop finishing — and it looked exactly
+  like a healthy one. A run whose every miss policy says *carry on* finishes, and
+  finishing is not the same as having worked.
+
+  Counts, and deliberately **no second score**. Each line is something the program
+  observed; a number out of a hundred would be an opinion, and an opinion in the same
+  shape as the pre-flight score — which measures something else entirely — would
+  invite a comparison that means nothing.
+
+- **The templates folder, against what the macro asks of it.** Pictures used,
+  pictures named and missing, pictures nothing in this macro names, and pictures that
+  are byte-for-byte the same image saved twice — compared by decoded pixels, not by
+  file bytes, because the duplicate people accumulate is the same crop re-saved by a
+  different editor.
+
+  Nothing is deleted, and the wording is *"this macro does not name"* rather than
+  *"unused"*, with the reason on screen: the folder is shared by every macro on the
+  machine and this one cannot see the others. A list that reads as permission is how
+  somebody deletes a picture four other macros depend on.
+
+### Fixed
+
+- **A macro from a later version of this program loaded, lost half of itself, and
+  saved the loss back over the original.** Serde discards fields it does not
+  recognise without a word, so such a file opened here looking perfectly healthy;
+  saving it wrote back only the part this build understood, and the loss was visible
+  nowhere until the machine that wrote it opened it again.
+
+  Reading forwards is a direction nobody had looked in — every compatibility test in
+  the project ran the other way. The file still loads, because most of it will work
+  and refusing outright would strand somebody whose other machine is one release
+  ahead. What has stopped is saving over it without being asked: the load says so in
+  the status bar at the moment it is found out, and the save puts up a dialog naming
+  both formats.
+
+- **Two glyphs that have never drawn.** `✓` (U+2713) and `✗` (U+2717) are not in the
+  bundled font: they render as empty boxes. Both had been on the hand-curated list the
+  glyph test checks against since 1.6.0, so the test blessed them — and the panels that
+  used them were never looked at with human eyes, because their matrix rows had not
+  been driven.
+
+  The package panel has therefore shown `□ claim.png` instead of a tick since
+  dependency checking shipped. Everything now uses the heavy forms, `✔` (U+2714) and
+  `✖` (U+2716), which do draw; the two that do not have been struck off the allow-list,
+  so the test now catches them rather than permitting them.
+
+  Found by driving the 1.8.0 matrix rows: the step-trace panel drew three boxes where
+  it should have drawn two crosses and a tick.
+
+- **The newer-file save dialog offered "Don't run it".** It reused the pre-flight
+  gate's cancel string, so a dialog asking whether to *save* answered a question about
+  running. Its own wording now, in all six languages. (Matrix row T-36.)
+
+- **A newer-format file, saved over knowingly, kept its old version number.** Accepting
+  the loss correctly dropped the fields this build cannot read — and then wrote the file
+  back still claiming format 99. A version number that disagrees with what is in the
+  file is the exact fault the whole guard exists to prevent, only written by us this
+  time. It is now stamped with this format on the way out, and reopening it does not
+  warn again. (Matrix row T-38, plus a regression test.)
+
+- **A folder template read as `0 B` in the resource audit.** The size came from
+  `<name>.png`, which a folder template does not have. "0 B" beside a folder holding
+  three pictures reads as *an empty file, delete it* — the one impression that list
+  must never give. It now adds the variants up.
+
+- **A template kept as a folder of variants was reported as a missing picture.** A
+  folder of PNGs is one template with several variants — the same button in two
+  themes — and `load_template_set` has loaded them since they were introduced. The
+  list of what is on disk only ever looked at `*.png` files, so the checker called a
+  folder template missing and the packager left it out of packages.
+
+  Harmless while the check was a button somebody pressed. Not harmless in this
+  release, where a false error stands between the user and the Run button — which is
+  what turned it up. `template_exists` is now one function that the checker, the
+  packager and the audit all share.
+
+### Changed
+
+- A macro saved by this version says format 5. Files at versions 1 through 4 load
+  exactly as before and are written back at 5; nothing about how they behave changes.
+- `call_exists` in the checker now goes through `resolve_call_path` — the same
+  function the interpreter uses — instead of its own copy of the three-places rule.
+
+### Testing
+
+- **271 unit tests**, up from 255. The sixteen new ones cover: a file from a later
+  version being noticed and not relabelled; an older file being written back at the
+  current format; the recording note surviving a round trip while `from_future` never
+  reaches the disk; DPI read as the percentage Windows displays; a macro that calls
+  itself; a three-macro ring; a diamond that is *not* a cycle; a disabled `Call` that
+  cannot make one; the recogniser-language warning said once for nine steps; a
+  changed display mentioned for a flat recording and not for an image-aimed macro;
+  the passed-checks counts being per picture rather than per step; a run record
+  carrying its effort while a pre-1.8.0 line still loads; text clipping counted in
+  characters, which is what stops a Cyrillic screen reading from panicking a format
+  call; and a newer-format file, saved over knowingly, coming back as this format
+  rather than still claiming the old one.
+
+---
+
 ## [1.7.0]
 
 The release that came out of running the manual test matrix end to end.
