@@ -8245,8 +8245,15 @@ pub mod vision {
         pub scale: f32,
     }
 
-    fn luma(px: &[u8], i: usize, w: (f32, f32, f32)) -> f32 {
-        w.0 * px[i] as f32 + w.1 * px[i + 1] as f32 + w.2 * px[i + 2] as f32
+    /// Weighted brightness of one pixel.
+    ///
+    /// Takes the pixel as a `[u8; 4]` rather than as a slice and an offset, which is
+    /// what lets the loops below drop their bounds checks: the array's length is
+    /// known to the compiler, so the three reads are proved in range once, at the
+    /// type level, instead of being tested three times per pixel.
+    #[inline]
+    fn luma(p: &[u8; 4], w: (f32, f32, f32)) -> f32 {
+        w.0 * p[0] as f32 + w.1 * p[1] as f32 + w.2 * p[2] as f32
     }
 
     /// Grey plane plus a mask: fully transparent pixels take no part in the score,
@@ -8258,13 +8265,19 @@ pub mod vision {
     /// f32's precision on a large template.
     fn plane(px: &[u8], w: u32, h: u32, order: Order) -> (Vec<f32>, Vec<bool>) {
         let n = (w * h) as usize;
-        let mut g = vec![0.0; n];
-        let mut m = vec![true; n];
         let k = order.weights();
-        for i in 0..n {
-            g[i] = luma(px, i * 4, k) * (1.0 / 255.0);
-            m[i] = px[i * 4 + 3] >= 16;
-        }
+        // `as_chunks` turns the byte run into pixels the compiler can count: the
+        // four reads per pixel stop being four bounds checks, and both outputs can
+        // be built by `extend` from an exact-size iterator - one allocation each,
+        // filled once, where `vec![0.0; n]` and `vec![true; n]` wrote every element
+        // twice. This one takes the template, which is small either way; it is
+        // written like `plane_grey` below so the two read the same.
+        let (quads, _) = px.as_chunks::<4>();
+        let quads = &quads[..n];
+        let mut g = Vec::with_capacity(n);
+        let mut m = Vec::with_capacity(n);
+        g.extend(quads.iter().map(|p| luma(p, k) * (1.0 / 255.0)));
+        m.extend(quads.iter().map(|p| p[3] >= 16));
         (g, m)
     }
 
@@ -8275,17 +8288,29 @@ pub mod vision {
     /// not consult it.
     fn plane_grey(px: &[u8], w: u32, h: u32, order: Order) -> Vec<f32> {
         let n = (w * h) as usize;
-        let mut g = vec![0.0; n];
         let k = order.weights();
-        // Indexed rather than iterated, and `#[allow]`ed rather than "fixed".
-        // Measured on a quiet machine, interleaved against the iterator form: this
-        // is the hottest loop in the program and indexing is consistently the
-        // faster of the two here. Clippy's suggestion is good general advice and
-        // wrong in this one place.
-        #[allow(clippy::needless_range_loop)]
-        for i in 0..n {
-            g[i] = luma(px, i * 4, k) * (1.0 / 255.0);
-        }
+        // Runs over the whole haystack once per scale of every search, so a 1440p
+        // screen is 3.7 million pixels a go.
+        //
+        // The note here used to say indexing beat iterating, and it did - against
+        // `.iter().enumerate()` over the flat byte run, which cannot know the run
+        // divides into fours. `as_chunks` can: it hands back `&[[u8; 4]]`, and a
+        // fixed-size array needs no bounds check at all, so the indexed form's one
+        // advantage goes away. The allocation changes too - `vec![0.0; n]` zeroes
+        // fifteen megabytes and then overwrites every one of them, where
+        // `with_capacity` plus `extend` over an exact-size iterator writes them once.
+        //
+        // **Measured, and it is a wash.** Interleaved against the indexed form over
+        // four rounds of `--selftest vision`, every template and haystack size came
+        // out inside the run-to-run spread. That is the honest answer and it is worth
+        // writing down, because it says where the time in a search actually is: not
+        // in reading the pixels but in correlating them, which is why the four block
+        // kernels above earned their complexity and this did not. It is kept for the
+        // zeroing pass it does not do and for being the plainer code, not for speed.
+        let (quads, _) = px.as_chunks::<4>();
+        let quads = &quads[..n];
+        let mut g = Vec::with_capacity(n);
+        g.extend(quads.iter().map(|p| luma(p, k) * (1.0 / 255.0)));
         g
     }
 
@@ -12782,6 +12807,33 @@ static WINDOW_VISIBLE: AtomicBool = AtomicBool::new(true);
 /// Set by "Exit" so the close-to-tray rule lets that one close through.
 static ALLOW_CLOSE: AtomicBool = AtomicBool::new(false);
 
+/// The main window's egui context, kept so a thread that is not the UI thread can
+/// ask for a frame.
+///
+/// The window used to end every pass with an unconditional `request_repaint_after`
+/// of a tenth of a second, which meant it never slept: a settled window with nobody
+/// looking at it still woke the CPU and the GPU ten times a second, forever. It did
+/// that because the state it shows is written by six other threads - hooks, tray,
+/// scheduler, playback, collector, desktop watcher - and polling was the only way it
+/// knew to notice.
+///
+/// Saying so is both cheaper and quicker: idle costs nothing, and a hotkey pressed
+/// while another application is in front now reaches the window in the same
+/// millisecond rather than in the next tenth of a second.
+static UI_CTX: OnceLock<egui::Context> = OnceLock::new();
+
+/// Asks the main window to draw again.
+///
+/// Safe from any thread and cheap enough to call on every transition: `Context` is
+/// `Send + Sync`, and a repaint already pending is not queued twice. A no-op before
+/// the window exists, which is what makes it safe to call from `--play` and from the
+/// self-tests, where there is no window at all.
+fn wake_ui() {
+    if let Some(ctx) = UI_CTX.get() {
+        ctx.request_repaint();
+    }
+}
+
 /// Shows or hides the main window.
 ///
 /// Uses `ShowWindow` rather than a viewport command: the tray lives on the hook
@@ -12790,6 +12842,11 @@ static ALLOW_CLOSE: AtomicBool = AtomicBool::new(false);
 fn set_window_visible(visible: bool) {
     WINDOW_VISIBLE.store(visible, Ordering::Relaxed);
     platform::set_window_hidden(!visible);
+    // A window that has just been shown has not been drawn since it was hidden, and
+    // nothing else would ask it to until something else changed.
+    if visible {
+        wake_ui();
+    }
 }
 
 fn toggle_main_window() {
@@ -12803,6 +12860,24 @@ fn quit_application() {
     // only visible sign that Exit was registered.
     set_window_visible(true);
     platform::request_app_close();
+}
+
+/// "No movement recorded yet", for [`AppState::last_pos`].
+///
+/// Keeps `i32::MIN` in the x half, so the sentinel means what it meant when the two
+/// coordinates were separate values. No real pointer position can collide with it.
+const NO_LAST_POS: u64 = (i32::MIN as u32 as u64) << 32;
+
+/// Packs a pointer position into one word, x in the high half.
+#[inline]
+const fn pack_pos(x: i32, y: i32) -> u64 {
+    ((x as u32 as u64) << 32) | (y as u32 as u64)
+}
+
+/// Undoes [`pack_pos`].
+#[inline]
+const fn unpack_pos(v: u64) -> (i32, i32) {
+    ((v >> 32) as u32 as i32, v as u32 as i32)
 }
 
 pub struct AppState {
@@ -12909,8 +12984,20 @@ pub struct AppState {
     pub rec_start_us: AtomicU64,
     pub last_move_us: AtomicU64,
     pub recorded_time_us: AtomicU64,
-    pub last_x: Mutex<i32>,
-    pub last_y: Mutex<i32>,
+    /// Where the pointer was when the last movement was recorded, both coordinates
+    /// packed into one word by [`pack_pos`].
+    ///
+    /// One atomic rather than the pair of mutexes this used to be. It is read and
+    /// written from the low-level mouse hook, which runs on every movement of the
+    /// pointer anywhere on the desktop and which Windows silently unhooks if it
+    /// dawdles - so it must never wait on a lock that another thread happens to be
+    /// holding, and `start_recording` on the UI thread did hold both of these.
+    ///
+    /// Packed rather than kept as two atomics because the coordinates have to move
+    /// together: a reset landing between two separate stores would leave one half at
+    /// the sentinel and turn the next delta into a subtraction from `i32::MIN`. The
+    /// pair of mutexes had that same gap; one word closes it.
+    pub last_pos: AtomicU64,
 
     // data
     pub macro_data: Mutex<MacroData>,
@@ -12986,8 +13073,7 @@ impl AppState {
             rec_start_us: AtomicU64::new(0),
             last_move_us: AtomicU64::new(0),
             recorded_time_us: AtomicU64::new(0),
-            last_x: Mutex::new(i32::MIN),
-            last_y: Mutex::new(i32::MIN),
+            last_pos: AtomicU64::new(NO_LAST_POS),
 
             macro_data: Mutex::new(MacroData::default()),
             current_path: Mutex::new(None),
@@ -13027,7 +13113,11 @@ fn apply_config_to_state(cfg: &AppConfig, state: &AppState) {
         *state.speed.lock() = cfg.speed;
     }
     state.target_pause_unfocused.store(cfg.target_pause_unfocused, Ordering::Relaxed);
-    *state.target_title.lock() = cfg.target_title.clone();
+    // `clone_from`, not `clone`: this whole function runs on every frame, and the
+    // assignment used to free and reallocate the title each time - under a lock the
+    // playback loop takes on every step. Reusing the buffer makes the common case
+    // (the title has not changed) a memcpy into memory that is already there.
+    state.target_title.lock().clone_from(&cfg.target_title);
     state.schedule_enabled.store(cfg.schedule_enabled, Ordering::Relaxed);
     state.schedule_hm.store(cfg.schedule_h * 60 + cfg.schedule_m, Ordering::Relaxed);
     state.schedule_days.store(cfg.schedule_days as u32, Ordering::Relaxed);
@@ -13053,9 +13143,15 @@ fn apply_config_to_state(cfg: &AppConfig, state: &AppState) {
 
 /// Multiplies the live playback speed, clamped to the engine's range.
 fn nudge_speed(state: &AppState, factor: f64) {
-    let mut sp = state.speed.lock();
-    *sp = (*sp * factor).clamp(0.05, 10.0);
-    info!("speed is now {:.2}x", *sp);
+    // The guard is dropped before the log line: `info!` formats and hands the record
+    // to the appender, and the playback loop reads this on every step.
+    let now = {
+        let mut sp = state.speed.lock();
+        *sp = (*sp * factor).clamp(0.05, 10.0);
+        *sp
+    };
+    info!("speed is now {now:.2}x");
+    wake_ui();
 }
 
 /// True when playback may proceed: either no target window is configured, or the
@@ -14755,10 +14851,14 @@ impl ScriptCtx<'_> {
             return;
         }
         let us = took.as_micros() as u64;
-        let e = self.tally.entry(self.step_id).or_insert(runlog::StepRun {
-            id: self.step_id,
-            ..Default::default()
-        });
+        // `or_insert_with`: this runs once per step, and the eager form built a
+        // `StepRun` on every call only to drop it again for every step after the
+        // first.
+        let id = self.step_id;
+        let e = self
+            .tally
+            .entry(id)
+            .or_insert_with(|| runlog::StepRun { id, ..Default::default() });
         e.runs += 1;
         if ok {
             e.ok += 1;
@@ -14867,7 +14967,7 @@ impl ScriptCtx<'_> {
             }
             OnMiss::Recover { name } => {
                 info!("{what}: not found - running the recovery block '{name}'");
-                MissAct::Recover(name.clone())
+                MissAct::Recover(name)
             }
         }
     }
@@ -15060,9 +15160,18 @@ impl ScriptCtx<'_> {
         if candidate.is_absolute() {
             tries.push(candidate.clone());
         } else {
-            if let Some(dir) =
-                self.state.current_path.lock().as_ref().and_then(|p| p.parent().map(|d| d.to_path_buf()))
-            {
+            // Read into a local first. A guard built in the scrutinee of an `if let`
+            // lives until the end of the whole expression, so the inline form held
+            // the current-path lock - which the UI thread also takes - across the
+            // body. Nothing here needs it for that long.
+            let here = self
+                .state
+                .current_path
+                .lock()
+                .as_deref()
+                .and_then(Path::parent)
+                .map(Path::to_path_buf);
+            if let Some(dir) = here {
                 tries.push(dir.join(&candidate));
             }
             tries.push(paths::data_dir().join(&candidate));
@@ -16356,6 +16465,7 @@ fn playback_loop(state: Arc<AppState>, data: MacroData, generation: u64) {
     if data.is_empty() {
         state.playing.store(false, Ordering::Relaxed);
         end_test_run(&state);
+        wake_ui();
         return;
     }
 
@@ -16490,6 +16600,7 @@ fn playback_loop(state: Arc<AppState>, data: MacroData, generation: u64) {
         if state.play_generation.load(Ordering::Relaxed) == generation {
             state.paused.store(false, Ordering::Relaxed);
             state.playing.store(false, Ordering::Relaxed);
+            wake_ui();
         }
         info!("script finished after {count} cycle(s)");
 
@@ -16714,6 +16825,7 @@ fn playback_loop(state: Arc<AppState>, data: MacroData, generation: u64) {
     if state.play_generation.load(Ordering::Relaxed) == generation {
         state.paused.store(false, Ordering::Relaxed);
         state.playing.store(false, Ordering::Relaxed);
+        wake_ui();
     }
     info!("playback finished after {count} cycle(s)");
     if should_log_run(&state) {
@@ -16884,6 +16996,8 @@ fn stop_recording(state: &AppState) {
         data.duration_us = dur.max(data.last_t());
         data.version = 2;
         info!("recording stopped: {} events, {} us", data.events.len(), dur);
+        drop(data);
+        wake_ui();
     }
 }
 
@@ -16924,8 +17038,7 @@ fn start_recording(state: &Arc<AppState>) {
         data.recorded = recorded;
     }
     state.click_shots.lock().clear();
-    *state.last_x.lock() = i32::MIN;
-    *state.last_y.lock() = i32::MIN;
+    state.last_pos.store(NO_LAST_POS, Ordering::Relaxed);
     state.last_move_us.store(0, Ordering::Relaxed);
     state.recorded_time_us.store(0, Ordering::Relaxed);
     state.rec_start_us.store(now_us(), Ordering::Relaxed);
@@ -17021,6 +17134,7 @@ fn start_playback_mode(state: &Arc<AppState>, test: bool) {
     // script most wants to see.
     state.step_once.store(false, Ordering::Relaxed);
     state.playing.store(true, Ordering::Relaxed);
+    wake_ui();
 
     let s = state.clone();
     match std::thread::Builder::new()
@@ -17031,6 +17145,7 @@ fn start_playback_mode(state: &Arc<AppState>, test: bool) {
         Err(e) => {
             warn!("failed to spawn playback thread: {e}");
             state.playing.store(false, Ordering::Relaxed);
+            wake_ui();
             // Nothing will reach the end of `playback_loop` to undo this, and a
             // suppression left switched on is a Play button that silently does
             // nothing for the rest of the session.
@@ -17069,6 +17184,7 @@ fn stop_playback(state: &AppState) {
         state.paused.store(false, Ordering::Relaxed);
         state.stop_play.store(true, Ordering::Relaxed);
         info!("playback stop requested");
+        wake_ui();
     }
 }
 
@@ -17085,6 +17201,7 @@ fn toggle_pause(state: &AppState) {
         let now = !state.paused.load(Ordering::Relaxed);
         state.paused.store(now, Ordering::Relaxed);
         info!("playback {}", if now { "paused" } else { "resumed" });
+        wake_ui();
     }
 }
 
@@ -17914,12 +18031,23 @@ unsafe extern "system" fn ms_proc(
                                 let step = state.mouse_sample_us.load(Ordering::Relaxed);
                                 if last == 0 || now.saturating_sub(last) >= step {
                                     state.last_move_us.store(now, Ordering::Relaxed);
-                                    let mut lx = state.last_x.lock();
-                                    let mut ly = state.last_y.lock();
-                                    let (dx, dy) =
-                                        if *lx == i32::MIN { (0, 0) } else { (x - *lx, y - *ly) };
-                                    *lx = x;
-                                    *ly = y;
+                                    // Read and replaced in one step, so two
+                                    // movements can never both measure themselves
+                                    // against the same previous point.
+                                    let prev = state
+                                        .last_pos
+                                        .swap(pack_pos(x, y), Ordering::Relaxed);
+                                    // Saturating, because this is a hook callback
+                                    // and the file's rule for those is that they
+                                    // cannot panic. Screen coordinates never come
+                                    // near the point where it bites; the arithmetic
+                                    // simply has no way to trap now.
+                                    let (dx, dy) = if prev == NO_LAST_POS {
+                                        (0, 0)
+                                    } else {
+                                        let (lx, ly) = unpack_pos(prev);
+                                        (x.saturating_sub(lx), y.saturating_sub(ly))
+                                    };
                                     Some(InputEventKind::MouseMove { x, y, dx, dy })
                                 } else {
                                     None
@@ -27679,6 +27807,10 @@ struct ExtraWindow {
 impl AppInner {
     fn new(cc: &eframe::CreationContext<'_>, state: Arc<AppState>, config: AppConfig) -> Self {
         setup_fonts(&cc.egui_ctx);
+        // Published before anything else can change what the window shows, so no
+        // transition between here and the first frame is lost. Set once; a second
+        // window would be a second application.
+        let _ = UI_CTX.set(cc.egui_ctx.clone());
         let panel_fill =
             apply_theme(&cc.egui_ctx, theme_at(config.default_theme), config.transparent_ui);
         let exp_book = expander::snapshot();
@@ -31320,8 +31452,13 @@ impl AppInner {
     /// window is only asked again if something asks for it.
     fn logic(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
         // Any window whose X was clicked since the last pass. Taken as a batch so the
-        // lock is held for the swap and not for the handlers.
-        for closed in std::mem::take(&mut *PENDING_CLOSES.lock()) {
+        // lock is held for the swap and not for the handlers - which needs the two
+        // statements it has. A guard built in the iterator expression of a `for`
+        // lives until the end of the loop, so writing this as one line held the lock
+        // across every handler: exactly what the comment says it avoids, and exactly
+        // the hazard `PENDING_CLOSES` is documented not to have.
+        let closes = std::mem::take(&mut *PENDING_CLOSES.lock());
+        for closed in closes {
             closed(self);
         }
         self.handbook_viewport(ctx);
@@ -33062,7 +33199,32 @@ impl AppInner {
         // Idempotent every frame: the engine can never drift from the UI.
         self.config.sanitize();
         apply_config_to_state(&self.config, &self.state);
-        ui.ctx().request_repaint_after(Duration::from_millis(100));
+
+        // Poll only while something is moving.
+        //
+        // This used to be an unconditional tenth of a second, which meant the window
+        // never slept: a settled application nobody was looking at still woke the CPU
+        // and the GPU ten times a second for a picture that could not have changed.
+        // It polled because the things it shows - the transport flags, the step count,
+        // the speed - are written by other threads and polling was the only way it
+        // knew to notice.
+        //
+        // Those threads now say so themselves through `wake_ui`, which is both
+        // cheaper when nothing is happening and quicker when something is: a hotkey
+        // pressed while another application is in front reaches the window at once
+        // rather than within the next tenth of a second. The tick that remains is for
+        // the counters that genuinely do change on their own - elapsed time, the event
+        // tally, the loop count - and only a run or a recording has any.
+        //
+        // The slow tick when idle is belt and braces, not the mechanism: it is what
+        // catches anything this file forgot to wake, at a fortieth of the old cost.
+        //
+        // Deliberately not keyed on `status_msg`: it is written once and never
+        // cleared, so a window that had shown one message would have polled at the
+        // old rate for the rest of the session - and a line of text that nothing is
+        // rewriting needs no frame to keep saying the same thing.
+        let live = busy || paused || self.state.test_run.load(Ordering::Relaxed);
+        ui.ctx().request_repaint_after(Duration::from_millis(if live { 100 } else { 4000 }));
     }
 
     fn on_exit(&mut self, _gl: Option<&eframe::glow::Context>) {
@@ -36831,9 +36993,8 @@ mod tests {
     #[test]
     fn a_broken_float_falls_back_rather_than_poisoning_playback() {
         // JSON cannot carry NaN, but a hand-edited file or a bad merge can.
-        let mut c = AppConfig::default();
-        c.speed = f64::NAN;
-        c.img_threshold = f64::INFINITY;
+        let mut c =
+            AppConfig { speed: f64::NAN, img_threshold: f64::INFINITY, ..Default::default() };
         c.sanitize();
         assert_eq!(c.speed, 1.0);
         assert_eq!(c.img_threshold, 0.85);
@@ -36841,10 +37002,12 @@ mod tests {
 
     #[test]
     fn the_time_limit_survives_its_own_maximum() {
-        let mut c = AppConfig::default();
-        c.time_limit_h = 240;
-        c.time_limit_m = 59;
-        c.time_limit_s = 59;
+        let mut c = AppConfig {
+            time_limit_h: 240,
+            time_limit_m: 59,
+            time_limit_s: 59,
+            ..Default::default()
+        };
         c.sanitize();
         assert_eq!(c.time_limit_us(), (240 * 3600 + 59 * 60 + 59) * 1_000_000);
     }
@@ -37601,9 +37764,9 @@ mod tests {
     /// template much wider than it is tall loses the detail that distinguishes it
     /// when it shrinks, so the coarse pass can prefer somewhere else entirely and
     /// the fine pass never gets to look at the right place. Measured on a real
-    /// desktop, a 170x32 button came back 123 px below itself with a score of 0.867
-    /// - above the default threshold of 0.85, so the step reported success and would
-    /// have clicked the wrong thing.
+    /// desktop, a 170x32 button came back 123 px below itself with a score of
+    /// 0.867 - above the default threshold of 0.85, so the step reported success and
+    /// would have clicked the wrong thing.
     ///
     /// The haystack here is built to force exactly that: two 170x32 patches of fine
     /// vertical stripes, one of period 2 and one of period 3. Shrunk, both average
@@ -37889,18 +38052,20 @@ mod tests {
             let bytes = line.as_bytes();
             let mut i = 0;
             while i + 3 < bytes.len() {
-                if bytes[i] == b'\\' && bytes[i + 1] == b'u' && bytes[i + 2] == b'{' {
-                    if let Some(close) = line[i + 3..].find('}') {
-                        let hex = &line[i + 3..i + 3 + close];
-                        if let Ok(cp) = u32::from_str_radix(hex, 16)
-                            && let Some(ch) = char::from_u32(cp)
-                            && is_symbolish(ch)
-                        {
-                            out.push((n + 1, ch));
-                        }
-                        i += 3 + close;
-                        continue;
+                if bytes[i] == b'\\'
+                    && bytes[i + 1] == b'u'
+                    && bytes[i + 2] == b'{'
+                    && let Some(close) = line[i + 3..].find('}')
+                {
+                    let hex = &line[i + 3..i + 3 + close];
+                    if let Ok(cp) = u32::from_str_radix(hex, 16)
+                        && let Some(ch) = char::from_u32(cp)
+                        && is_symbolish(ch)
+                    {
+                        out.push((n + 1, ch));
                     }
+                    i += 3 + close;
+                    continue;
                 }
                 i += 1;
             }
@@ -38541,7 +38706,7 @@ mod tests {
     /// The same picture, made lighter or darker the way a theme change does.
     fn reshade(f: &vision::Frame, add: i16, gain: f32) -> vision::Frame {
         let mut px = f.px.clone();
-        for p in px.chunks_exact_mut(4) {
+        for p in px.as_chunks_mut::<4>().0 {
             for c in p.iter_mut().take(3) {
                 let v = (*c as f32 * gain) as i16 + add;
                 *c = v.clamp(0, 255) as u8;
@@ -38684,8 +38849,8 @@ mod tests {
         let dark_on_light = ocr::prepare(&strip(240, 20, 100), ocr::Prep::Game, vision::Order::Rgba);
         for (name, out) in [("light on dark", light_on_dark), ("dark on light", dark_on_light)]
         {
-            let black = out.chunks_exact(4).filter(|p| p[0] == 0).count();
-            let white = out.chunks_exact(4).filter(|p| p[0] == 255).count();
+            let black = out.as_chunks::<4>().0.iter().filter(|p| p[0] == 0).count();
+            let white = out.as_chunks::<4>().0.iter().filter(|p| p[0] == 255).count();
             assert_eq!(black + white, 100, "{name}: something is not black or white");
             assert!(black < white, "{name}: the text should be the black minority");
         }
@@ -39080,7 +39245,7 @@ mod tests {
             }
         }
         let mut bgra = rgba.clone();
-        for p in bgra.chunks_exact_mut(4) {
+        for p in bgra.as_chunks_mut::<4>().0 {
             p.swap(0, 2);
             p[3] = 0; // and GDI leaves the alpha at zero, as the real thing does
         }
@@ -39245,8 +39410,13 @@ mod tests {
         // held. The cap is the only thing standing between that and a macro that
         // names itself, so it has to be a small number and it has to be checked
         // before the recursion, not after.
-        assert!(MAX_CALL_DEPTH >= 2, "nesting has to be worth having");
-        assert!(MAX_CALL_DEPTH <= 32, "a cap this deep is not a cap");
+        // In a `const` block, so the answer comes from the compiler rather than from
+        // a test run: the cap is a constant, and a constant that has drifted out of
+        // range should not be able to build in the first place.
+        const {
+            assert!(MAX_CALL_DEPTH >= 2, "nesting has to be worth having");
+            assert!(MAX_CALL_DEPTH <= 32, "a cap this deep is not a cap");
+        }
     }
 
     // ---- 1.5.0: recording into picture steps --------------------------------
@@ -40565,7 +40735,7 @@ mod tests {
         let moved = data.script.iter().find(|st| st.id == second).expect("still there");
         assert!(matches!(moved.kind, StepKind::Wait { ms: 200 }));
         assert_eq!(stats.get(&moved.id).unwrap().runs, 10);
-        assert!(stats.get(&first).is_none(), "the fast step still has no numbers");
+        assert!(!stats.contains_key(&first), "the fast step still has no numbers");
     }
 
     #[test]
@@ -41639,6 +41809,30 @@ mod tests {
     }
 
     #[test]
+    fn the_parked_closes_are_taken_before_the_handlers_run() {
+        // `PENDING_CLOSES` is documented as a lock nothing holds while it waits for
+        // the application lock. It was not. The take used to sit in the iterator
+        // expression of the `for`, and a temporary guard built there lives until the
+        // end of the loop - so the lock really was held across every handler, which
+        // is the one thing that doc comment promises does not happen.
+        //
+        // Rust's temporary lifetimes make that invisible at the call site, so it is
+        // asserted on the source, in the same spirit as the test above: the take has
+        // to be a statement of its own, because that is what ends the guard's life
+        // before the handlers run.
+        let source = include_str!("main.rs");
+        let at = source
+            .find("std::mem::take(&mut *PENDING_CLOSES.lock())")
+            .expect("the parked closes are no longer taken anywhere");
+        let line_start = source[..at].rfind('\n').map_or(0, |i| i + 1);
+        let line = source[line_start..].lines().next().unwrap_or("").trim_start();
+        assert!(
+            line.starts_with("let "),
+            "the take is not a statement of its own ({line:?}), so the lock outlives it"
+        );
+    }
+
+    #[test]
     fn the_handbook_window_is_the_one_that_decides_it_is_shut() {
         // The whole of the 1.9.1 fault, as five transitions.
         // Pressing ? with the book shut asks for it, and the ask is heard once.
@@ -42234,10 +42428,12 @@ mod tests {
     fn a_profile_leaves_the_settings_it_says_nothing_about_alone() {
         // Speed, loop count and the target window are not part of a profile: somebody
         // who set the speed to 0.5 and then picked "Game" did not ask for it back.
-        let mut cfg = AppConfig::default();
-        cfg.speed = 0.5;
-        cfg.play_count_limit = 42;
-        cfg.target_title = "Roblox".into();
+        let mut cfg = AppConfig {
+            speed: 0.5,
+            play_count_limit: 42,
+            target_title: "Roblox".into(),
+            ..Default::default()
+        };
         PlaybackProfile::HumanLike.apply(&mut cfg);
         assert_eq!(cfg.speed, 0.5);
         assert_eq!(cfg.play_count_limit, 42);
