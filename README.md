@@ -854,10 +854,10 @@ to explain itself with. A tooltip can only answer *what is this control*; it can
 answer *what is this program for*, which is the question somebody looking at **Macro
 package**, **Macro library** and **Templates folder** is asking about all three at once.
 
-> The handbook is written in English and Russian — the two languages this project's own
-> documentation exists in. The other four fall back to the English text rather than to a
-> machine translation of it, and like every other string in the program it can be
-> overridden through `lang/<code>.json` without a rebuild.
+> *Since 1.9.1* the handbook is written in all six interface languages — English,
+> Russian, Ukrainian, Portuguese, Spanish and Chinese — and follows whichever one the
+> interface is set to. Like every other string in the program it can be overridden
+> through `lang/<code>.json` without a rebuild.
 
 ---
 
