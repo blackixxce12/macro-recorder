@@ -7,6 +7,102 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); version
 
 ---
 
+## [1.9.1]
+
+Six things reported against 1.9.0, and the two that were not what they looked like.
+
+### Fixed
+
+- **The extra windows froze when the main window was minimised.** The editor, the
+  handbook, the variables window and the run history could not be scrolled, moved or
+  even closed once the program was in the taskbar.
+
+  They were *immediate* viewports, which are drawn from inside the parent's frame —
+  and on Windows a minimised window is never given a frame, so everything it owned
+  stopped with it. They are now **deferred** viewports declared from `App::logic`
+  rather than `App::update`: each callback reaches the application through a weak
+  handle instead of borrowing it, and the program asks for a repaint while any of them
+  is open. Minimise the main window now and the handbook keeps scrolling.
+
+- **An empty square beside every drop-down.** The chevron in a combo box's own label
+  was U+25BE, which the shipped monospace font has and the proportional font it was
+  drawn with does not. It has been a `.notdef` box next to a perfectly good arrow for
+  several releases; egui paints that arrow itself, so the character is simply gone.
+
+  Two faults in the check let it ship, and both are fixed:
+
+  - The source scanner read literal characters only, so a character written as a
+    `\u{...}` escape was invisible to it. It decodes the escapes now.
+  - The check itself compared a character's atlas rectangle against **U+10FFFD**, a
+    noncharacter the shaper discards outright — so there was nothing to compare with,
+    and every real box passed. It now compares against assigned codepoints the fonts
+    genuinely lack, and it is checked against what the window actually draws.
+
+  What replaced the old curated allow-list is a measurement rather than a list, which
+  is the part that matters: a list is only ever as good as the last person to update it.
+
+- **The window sometimes came back as a tiny square.** eframe restores whatever winit
+  reported at the moment the program closed, and closing it while it minimises writes
+  nonsense — this machine had a 64-pixel inner size saved in `app.ron`, and every
+  launch after that was a 64-pixel square in the corner. `with_min_inner_size` does not
+  help, because the restored size is applied after the builder. The first frame now
+  looks at the size that actually arrived and asks for the default back when it is
+  below the minimum.
+
+- **The handbook described a playback profile the window did not offer.** *Custom* is a
+  description rather than a choice — it is what the settings are once you change one by
+  hand — and it was documented but never shown. The drop-down now lists it when the
+  settings match none of the three presets, and choosing it does nothing, because there
+  is nothing for it to do.
+
+- **The handbook showed its own markup.** The grammar had `**bold**` and `` `code` ``
+  but not `*emphasis*`, and the prose used all three — so every `*like this*` rendered
+  with the stars visible, in English, Ukrainian, Portuguese, Spanish and Chinese. There
+  were 396 of them. Russian was the one language that never used the form and so was
+  the one place the fault could not be seen.
+
+  A single star is markup now, drawn as a slant because the shipped proportional font
+  has one weight. It has to touch the word it marks, so `2 * 3` is still arithmetic;
+  and `` `code` `` inside emphasis comes back out still emphasised, which is what the
+  closing star of *play from `a` to `b`* needs in order to have something to close.
+
+  The test that keeps it out is on the **output** of the splitter rather than on the
+  source: no run that reaches the page may contain a star or a backtick.
+
+- **The handbook called steps by names the interface does not use.** Every step name in
+  the articles now matches the window exactly, and a test asserts it, so the two cannot
+  drift apart again.
+
+### Added
+
+- **The handbook in all six interface languages.** Ukrainian, Portuguese, Spanish and
+  Chinese join English and Russian: forty-six articles each, written rather than
+  machine-translated, and the book follows whichever language the interface is set to.
+  A test asserts that all six times forty-six exist and that none of them is a stub.
+
+### Changed
+
+- **The handbook scrolls smoothly.** The search was recomputed every frame, lowercasing
+  all forty-six articles each time; the result is now cached against the query and the
+  language. Scrolling is animated, the window keeps painting while the pointer is over
+  it rather than only when an event arrives, and opening an article starts it at its
+  own top instead of at the scroll offset of the one before it.
+
+### Testing
+
+- **284 unit tests**, up from 278. The six new ones assert that the glyph check agrees
+  with what the window actually draws; that every character the source draws has a
+  glyph in the fonts shipped with the program; that only Chinese text leans on a font
+  that comes from Windows; that every topic exists in every one of the six languages;
+  that a window restored at a nonsense size comes back at the default while a
+  small-but-usable one is left exactly as it was; and that no article shows its own
+  markup in any of the six languages.
+
+- The full self-test set was run against the release build: `dryrun`, `target`,
+  `recovery`, `script=500`, `simd` and `churn=120`. No failures.
+
+---
+
 ## [1.9.0]
 
 The release that stopped explaining itself in the margins.
