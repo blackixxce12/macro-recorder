@@ -373,6 +373,8 @@ flowchart TD
 
 `timeBeginPeriod(1)` is requested for the duration of playback only and released afterwards, so the app doesn't keep the whole system on a high-resolution timer while idle.
 
+**The window sleeps when nothing is happening.** Since 1.9.3 the UI does not repaint on a timer: the threads that change what it shows — hooks, tray, scheduler, playback — wake it when they do. A settled window costs about 0.2 % of one core and a quarter of a frame per second, against 1.6 % and 8.8 frames before, and a hotkey pressed while another application is in front now reaches the window at once rather than on the next tick.
+
 ### Two playback modes
 
 A macro with **no script** is replayed flat: event by event, on the recorded timing. A macro **with a script** hands control to the interpreter instead, and the recording becomes a library of slices the script can play (`Play events 0…240`).
@@ -1278,6 +1280,14 @@ The binary lands in `target/release/`. Release profile: `opt-level = 3`, fat LTO
 **Icon:** `build.rs` embeds `assets/icon.ico` into the executable using [`winresource`](https://github.com/BenjaminRi/winresource), which needs a resource compiler — `rc.exe` (Windows SDK, comes with the MSVC toolchain) or `windres.exe` (MinGW). If it isn't found the build still succeeds; you just get a `cargo:warning` and no Explorer icon. The window icon comes from `assets/icon.rgba` and always works.
 
 To watch what the app is doing, either read `logs/macro-recorder.log.*` or build in debug mode (which keeps a console attached) and set `RUST_LOG=debug`.
+
+**Inspecting the live UI.** eframe can serve [egui's inspection protocol](https://crates.io/crates/egui_inspection), which lets an external tool read the widget tree, inject clicks and keystrokes, and capture screenshots of the running app. It is **not** in the release build: it pulls in msgpack and AccessKit machinery worth about 830 KB to serve a port a shipped binary never opens. To use it, add `"inspection"` to eframe's feature list in `Cargo.toml`, rebuild, and start the app with the environment variable set:
+
+```sh
+EGUI_INSPECTION=1 ./macro-recorder.exe        # binds 127.0.0.1:5719
+```
+
+Then point [`egui_mcp`](https://crates.io/crates/egui_mcp) — or anything else speaking the protocol — at it. The reply to a tree request carries a frame counter, which is how 1.9.3's idle repaint was found and how the fix was measured. Take the feature back out before building a release. Never bind a non-loopback address: the protocol has no authentication and gives full control of the app.
 
 ---
 
