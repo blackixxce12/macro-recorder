@@ -7,6 +7,148 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); version
 
 ---
 
+## [1.9.3]
+
+The window learns to sleep.
+
+A settled window that nobody is looking at was still waking the processor and the
+graphics card ten times a second, for a picture that could not have changed. This
+release is that, three concurrency faults found while looking for it, and a pass over
+the source against everything Rust 1.98 and clippy have to say about it.
+
+Nothing about how macros record or run changed. The format is still 5.
+
+### Changed
+
+- **The main window no longer repaints on a timer while nothing is happening.** Every
+  pass of the UI ended with an unconditional *"ask me again in a tenth of a second"*.
+  It did that because the things the window shows — the transport flags, the step
+  tally, the speed — are written by six other threads, and polling was the only way it
+  knew to notice them.
+
+  Those threads now say so themselves. A single shared `Context` and a `wake_ui()` call
+  at each transition — record started or stopped, playback started, finished or
+  cancelled, pause toggled, speed nudged, window brought back from the tray — replaces
+  the poll. The tick that remains is for the counters that genuinely do change on their
+  own, and only a run or a recording has any; when neither is going the window sleeps
+  and is woken.
+
+  Measured on release builds, run alternately, window idle and settled:
+
+  | | frames per second | CPU, five 20–30 s samples |
+  |---|---|---|
+  | 1.9.2 | 8.8 | 1.56 %, 1.64 % of one core |
+  | 1.9.3 | 0.25 | 0.00 % – 0.26 %, median 0.00 % |
+
+  The 1.9.3 samples are not all zero because the scheduler and the responsiveness
+  sampler still wake on their own timers; the point is that the window no longer does.
+
+  It is also *quicker*, which is the part worth stressing. A hotkey pressed while
+  another application is in front used to reach the window on the next tick — up to a
+  tenth of a second later. It now arrives in the same millisecond, because the thread
+  that handled it says so rather than waiting to be asked.
+
+  Interaction and animation are untouched: egui already requests the frames its own
+  animations need, so a section still expands over fifteen frames and then goes quiet.
+
+### Fixed
+
+- **A lock was held across every window-close handler, which is the one thing its
+  documentation promised it was not.** The parked closes were taken with
+  `std::mem::take(&mut *PENDING_CLOSES.lock())` written directly in the iterator
+  expression of a `for` — and a temporary guard built there lives until the end of the
+  loop, not until the end of the expression. So the lock really was held while each
+  handler ran.
+
+  Rust's temporary lifetimes make this invisible at the call site: the code reads
+  exactly like the correct version, and the comment beside it asserted the behaviour it
+  did not have. Split into two statements, which is what ends the guard's life before
+  the handlers start. A test asserts it on the source and was checked against the
+  broken form to be sure it fails on it.
+
+  Like the 1.9.2 fault it is hardening rather than something anybody hit — but it is
+  the same shape, and the same argument applies.
+
+- **The low-level mouse hook took two mutexes on every movement of the pointer.** The
+  last recorded position was a pair of `Mutex<i32>`, read and written from the
+  `WH_MOUSE_LL` callback — which runs on every movement of the pointer anywhere on the
+  desktop, and which Windows silently unhooks if it dawdles. `start_recording`, on the
+  UI thread, took both of the same mutexes. Nothing had gone wrong, but the arrangement
+  meant the UI thread could stall system-wide mouse input, and vice versa.
+
+  It is one `AtomicU64` now, both coordinates packed into the word and read back with a
+  single `swap`. That also closes a gap the pair had: a reset landing between the two
+  mutexes left one coordinate at the sentinel and turned the next delta into a
+  subtraction from `i32::MIN`. The subtraction is saturating as well, so the callback
+  matches the rule this file states for hook callbacks — that they cannot panic.
+
+- **The current-path lock outlived the `if let` that read it**, in the playback
+  engine's resolution of a called macro. The same temporary-lifetime rule as above,
+  found the same way. Read into a local first.
+
+### Performance
+
+- **A `String` was reallocated on every frame**, under a lock the playback loop takes on
+  every step: `apply_config_to_state` runs once per pass and assigned the target window
+  title with `clone`. It is `clone_from` now, so the common case — the title has not
+  changed — reuses the buffer that is already there.
+
+- **A `StepRun` was built on every step of playback and immediately dropped**, because
+  the run tally used the eager `or_insert` rather than `or_insert_with`.
+
+### Internal
+
+- **The pixel-to-grey conversions use `as_chunks`**, so the four reads per pixel are
+  proved in range once at the type level instead of four times per pixel, and both
+  outputs are filled once rather than zeroed and then overwritten — a 15 MB memset per
+  call on a 1440p haystack, thrown away immediately.
+
+  **Measured, and it is a wash.** Four rounds of `--selftest vision` interleaved
+  between the two builds put every template and haystack size inside the run-to-run
+  spread. It is recorded here rather than quietly dropped because the negative result
+  is the useful one: it says the time in an image search is in correlating the pixels,
+  not in reading them, which is where the four SIMD kernels already are. The change is
+  kept for the zeroing pass it does not do and for being the plainer code.
+
+- **`cargo clippy --all-targets` is clean.** It reported around a dozen warnings in the
+  test module for several releases — known noise that had to be read past. Fixed:
+  `as_chunks` for constant chunk sizes, a let-chain for a nested `if let`, struct-update
+  syntax for the config builders, and the two `MAX_CALL_DEPTH` bounds moved into a
+  `const` block, so a cap that drifts out of range now fails the build rather than a
+  test run. A new warning there means something now.
+
+- **The non-test source was checked against about thirty-five modernisation lints** —
+  `as_chunks`, let-chains, `div_ceil`, `is_none_or`, the `manual_*` family and the rest
+  — and came back with **nothing**. It was already idiomatic for the edition it is
+  written in. Recorded so the next pass does not repeat the search.
+
+- **`suboptimal_flops` is still deliberately not applied** in the correlation kernels.
+  Clippy suggests `f32::mul_add`, which without `target_feature = "fma"` compiles to a
+  call into libm rather than to an FMA instruction — a slowdown, not a speed-up. The
+  vector kernels that *can* use FMA already do, through intrinsics.
+
+### Build
+
+- **The release binary is 10 879 488 B**, 3 072 B *smaller* than 1.9.2 despite everything
+  above. eframe's `inspection` feature — the debug port this release's main fix was found
+  and measured with — costs 830 976 B of msgpack and AccessKit machinery, and a shipped
+  build never opens that port. It is carried during investigation and removed before the
+  build that goes out; adding it back is one word in `Cargo.toml`, and the README says
+  where.
+
+### Testing
+
+- **287 unit tests**, up from 286. The new one asserts that the parked window closes
+  are taken into a binding of their own, and it was verified against the broken form
+  rather than assumed to work.
+
+- The full self-test set was run against the release build: `dryrun` (10 checks),
+  `target` (8), `recovery` (6), `script=500` (12), `timing`, `vision`, `simd` and
+  `churn=120`. No failures. Playback accuracy is unchanged — p99 between 1 and 22 µs
+  across the nine timing scenarios over two runs, no drift, no burst on any of them.
+
+---
+
 ## [1.9.2]
 
 The other three windows, checked rather than assumed.
