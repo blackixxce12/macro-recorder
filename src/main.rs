@@ -27603,6 +27603,11 @@ struct AppInner {
     /// The topic the main window last handed to the handbook, so a section header
     /// can move it without the next frame dragging it back.
     pushed_topic: &'static str,
+    /// The same for open-ness, and for the same reason. The window owns whether it is
+    /// up; this is only what the main window last said, so that pressing **?** is
+    /// heard once instead of every frame - which is what stopped the reader closing
+    /// the handbook at all in 1.9.1.
+    pushed_open: bool,
     /// Whether the restored window geometry has been looked at yet. Once per run.
     geometry_checked: bool,
     /// Which trace is open in the "why did that happen" panel, by its position in
@@ -27644,6 +27649,19 @@ struct AppInner {
     /// When the current "press a key" session started.
     capture_started: Option<Instant>,
 }
+
+/// Closes asked for by an extra window but not yet acted on.
+///
+/// `close_requested` is true for exactly **one** frame, and the callback below is
+/// allowed to fail to take the application lock. Dropping a frame of drawing is
+/// invisible; dropping the frame the close arrived in leaves a window that will not
+/// shut, which is the 1.9.1 fault in a second disguise. So the close is recorded here,
+/// outside the lock, and the main window drains it on its next pass.
+///
+/// Nothing holds this while waiting for the application lock, and nothing holds the
+/// application lock while waiting for this to be free of a waiter - so the two cannot
+/// deadlock against each other.
+static PENDING_CLOSES: Mutex<Vec<fn(&mut AppInner)>> = Mutex::new(Vec::new());
 
 /// One of the extra windows, described rather than passed as eight arguments.
 ///
@@ -27718,6 +27736,7 @@ impl AppInner {
             help_open: false,
             help_topic: "first-run",
             pushed_topic: "first-run",
+            pushed_open: false,
             geometry_checked: false,
             why_at: 0,
             template: None,
@@ -29024,6 +29043,9 @@ impl AppInner {
     /// application through a weak handle and a plain function pointer rather than by
     /// borrowing it. `try_lock` rather than `lock`: the main window holds the state
     /// while it draws, and a dropped frame is a great deal better than a deadlock.
+    ///
+    /// The close is read *before* that lock and parked in `PENDING_CLOSES`. A dropped
+    /// frame of drawing is invisible; a dropped close is a window that will not shut.
     fn extra_window(&self, ctx: &egui::Context, w: ExtraWindow) {
         let me = self.me.clone();
         let ExtraWindow { id, title, size, min, draw, closed } = w;
@@ -29034,12 +29056,14 @@ impl AppInner {
                 .with_inner_size(size)
                 .with_min_inner_size(min),
             move |ui, _class| {
+                // Before the lock, because the lock is allowed to fail and this is a
+                // one-frame edge. See `PENDING_CLOSES`.
+                if ui.input(|i| i.viewport().close_requested()) {
+                    PENDING_CLOSES.lock().push(closed);
+                }
                 let Some(inner) = me.upgrade() else { return };
                 let Some(mut app) = inner.try_lock() else { return };
                 draw(&mut app, ui);
-                if ui.input(|i| i.viewport().close_requested()) {
-                    closed(&mut app);
-                }
             },
         );
     }
@@ -29063,11 +29087,13 @@ impl AppInner {
                 hb.topic = self.help_topic;
                 hb.jump = hb.jump.wrapping_add(1);
             }
-            if self.help_open {
-                hb.open = true;
-            } else {
-                self.help_open = hb.open;
+            // Push only a change this window made, then take the window's answer.
+            let (push, now) = reconcile_open(self.help_open, self.pushed_open, hb.open);
+            if let Some(open) = push {
+                hb.open = open;
             }
+            self.help_open = now;
+            self.pushed_open = now;
         }
         if !self.help_open {
             return;
@@ -29091,8 +29117,10 @@ impl AppInner {
     /// is the whole of what "unobtrusive until wanted" needs to be.
     fn help_button(&mut self, ctx: &egui::Context) {
         let s = self.strs();
-        // F1 anywhere, and Escape to leave. Consumed rather than observed, so a text
-        // field underneath does not also receive it.
+        // F1 toggles it, from this window. Consumed rather than observed, so a text
+        // field underneath does not also receive it. Once the handbook is in front it
+        // has the keyboard and this no longer fires - its own X is the way out from
+        // there, for the reason recorded on `handbook_window`.
         if ctx.input_mut(|i| i.consume_key(egui::Modifiers::NONE, egui::Key::F1)) {
             self.help_open = !self.help_open;
         }
@@ -31291,6 +31319,11 @@ impl AppInner {
     /// living. The repaint request below is what keeps that ticking, because a hidden
     /// window is only asked again if something asks for it.
     fn logic(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
+        // Any window whose X was clicked since the last pass. Taken as a batch so the
+        // lock is held for the swap and not for the handlers.
+        for closed in std::mem::take(&mut *PENDING_CLOSES.lock()) {
+            closed(self);
+        }
         self.handbook_viewport(ctx);
         self.editor_viewport(ctx);
         self.vars_viewport(ctx);
@@ -36100,6 +36133,13 @@ fn handbook_window(root: &mut egui::Ui) {
         hb.topic = id;
         hb.jump = hb.jump.wrapping_add(1);
     }
+    // The X, and only the X. Escape and F1 were tried here and measured: a deferred
+    // viewport is handed the key *release* and not the press - `Key(Escape, false)`
+    // arrives, `Key(Escape, true)` never does - so `consume_key` has nothing to match.
+    // Closing on the release instead would shut the handbook when somebody pressed
+    // Escape in another window and let go over this one, which is worse than not
+    // having the shortcut. F1 still toggles it from the main window, where the press
+    // does arrive.
     if root.input(|i| i.viewport().close_requested()) {
         handbook_state().lock().open = false;
     }
@@ -36258,6 +36298,20 @@ fn handbook_state() -> &'static Arc<Mutex<HandbookState>> {
     HANDBOOK.get_or_init(|| {
         Arc::new(Mutex::new(HandbookState { topic: "first-run", ..Default::default() }))
     })
+}
+
+/// Settles who decides whether the handbook is up: the main window or the handbook.
+///
+/// The answer is the handbook, and the main window only gets to ask. `mine` is what the
+/// main window holds, `pushed` is what it last said, `theirs` is what the handbook state
+/// says now. The return is what to write into that state, if anything, and what the main
+/// window should hold afterwards.
+///
+/// 1.9.1 shipped this as `if mine { theirs = true }`, which is the same sentence with
+/// the two swapped round: the close the reader had just asked for was written back to
+/// `true` before the next frame reached the screen, and the window could not be shut.
+fn reconcile_open(mine: bool, pushed: bool, theirs: bool) -> (Option<bool>, bool) {
+    if mine != pushed { (Some(mine), mine) } else { (None, theirs) }
 }
 
 /// Remembers which handbook article a section belongs to.
@@ -41556,6 +41610,50 @@ mod tests {
             "translations for ids no topic answers to: {:?}",
             handbook::unreachable_translations()
         );
+    }
+
+    #[test]
+    fn an_extra_window_reads_its_close_before_it_takes_the_lock() {
+        // The 1.9.1 fault in a second disguise. `close_requested` is true for exactly
+        // one frame; the drawing lock is a `try_lock` and is allowed to fail. Read the
+        // close after the lock and a frame that could not draw is also a frame that
+        // silently threw away the reader's click on the X.
+        //
+        // Asserted on the order in the source because the alternative - building an
+        // `AppInner` and a viewport in a test - would assert on a copy of the thing
+        // rather than the thing.
+        let source = include_str!("main.rs");
+        let at = source.find("ctx.show_viewport_deferred(").expect("extra_window");
+        let body = &source[at..at + 900];
+        let close = body.find("close_requested").expect("no close in the callback");
+        let lock = body.find("try_lock").expect("no lock in the callback");
+        assert!(
+            close < lock,
+            "the close is read after the lock; a dropped frame now drops the close"
+        );
+        // The push itself, not a comment mentioning it, and between the two.
+        assert!(
+            body[close..lock].contains("PENDING_CLOSES.lock().push"),
+            "the close is read early but not parked anywhere the main window will find it"
+        );
+    }
+
+    #[test]
+    fn the_handbook_window_is_the_one_that_decides_it_is_shut() {
+        // The whole of the 1.9.1 fault, as five transitions.
+        // Pressing ? with the book shut asks for it, and the ask is heard once.
+        assert_eq!(reconcile_open(true, false, false), (Some(true), true));
+        // Open and agreed: nothing is written, so nothing is undone.
+        assert_eq!(reconcile_open(true, true, true), (None, true));
+        // The reader closes the window. The main window still holds `true` and has
+        // not changed it, so it says nothing and takes the answer instead. This is
+        // the line that was inverted: it used to write `true` back here.
+        assert_eq!(reconcile_open(true, true, false), (None, false));
+        // Shut and agreed.
+        assert_eq!(reconcile_open(false, false, false), (None, false));
+        // And ? works a second time, which it would not if the close had left the
+        // two sides out of step.
+        assert_eq!(reconcile_open(true, false, false), (Some(true), true));
     }
 
     #[test]
