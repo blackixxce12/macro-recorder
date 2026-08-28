@@ -42,6 +42,114 @@ load, thread interleaving, or hour nine — which is what the rest of this was f
 | 11 | [1.7.0: the matrix, run properly](#stage-11--170-the-matrix-run-properly) | 🖐 | done | ~170 matrix rows driven for real; six defects found and fixed; two phantoms caught before they were reported |
 | 12 | [1.8.0: saying it before it happens](#stage-12--180-saying-it-before-it-happens) | 🔧 🖐 | done | 271 tests; the pre-flight became a gate; 48 matrix rows driven; five defects found, two of them by promoting a diagnostic to a gate and three by looking at panels nobody had looked at |
 | 13 | [1.9.0: the handbook](#stage-13--190-the-handbook) | 🔧 | done | 278 tests; forty-six articles; fifty-one explanatory strings removed and a test that keeps them out |
+| 14 | [1.9.1: the oracle that agreed with itself](#stage-14--191-the-oracle-that-agreed-with-itself) | 🔧 🖐 | done | 284 tests; six reported defects fixed, plus a seventh found by reading the screen; a font check found to have been passing vacuously since it was written |
+
+---
+
+## Stage 14 — 1.9.1: the oracle that agreed with itself
+
+🔧 🖐 **Result: 278 to 284 tests, and the discovery that a passing font check had been
+passing for the wrong reason since it was written.**
+
+Six defects were reported against 1.9.0 by someone using it. Four were what they
+looked like. Two were not, and both of those were failures of a *test*, which is the
+part of this stage worth keeping.
+
+### The check that could not fail
+
+1.8.0 added a test asserting that every symbol the program draws has a glyph in the
+fonts shipped with it. It passed. It had always passed. And 1.9.0 shipped an empty
+square next to every drop-down in the program.
+
+Two independent faults, each sufficient on its own:
+
+- **The scanner read literal characters only.** The chevron was written as a
+  `\u{25be}` escape, so as far as the scan was concerned the program never drew it.
+- **The oracle compared against a noncharacter.** To decide whether a character draws
+  as itself, the check laid it out and compared its atlas rectangle against the
+  rectangle of a codepoint no font has. The sentinel chosen was **U+10FFFD** — a
+  noncharacter, which the shaper discards outright rather than substituting. There was
+  no rectangle to compare with, so the comparison was vacuously true and **every real
+  tofu passed**.
+
+The fix is a sentinel that is assigned but genuinely absent (U+13000, U+10900), and a
+second test that pins the oracle itself: three characters that visibly draw must report
+`true`, and two that visibly do not must report `false`. A check whose sentinel is
+wrong is worse than no check, because it is quoted as evidence.
+
+### And the fault that was neither the font's nor the scanner's
+
+With the oracle fixed, the chevron was still reported as present — because it *is*
+present, in the monospace font. It was being drawn with the proportional one. The
+check now asks the question in the font the character is actually rendered in, which
+turned three "only in monospace" characters into one real fault and two false alarms.
+
+The character is gone rather than replaced: egui paints a combo box's arrow itself, as
+a shape rather than a glyph, so there was never anything for it to say.
+
+### The two that were platform behaviour, not logic
+
+- **Child windows froze when the main window was minimised.** They were *immediate*
+  viewports, drawn from inside the parent's frame; Windows gives a minimised window no
+  frames. Nothing was wrong with the windows — they were never being asked to draw.
+  Deferred viewports declared from `App::logic` fixed it, and the fix cannot be
+  asserted in a unit test: it was confirmed by minimising the window and scrolling the
+  handbook.
+- **The window came back as a 64-pixel square.** eframe restores what winit reported
+  at close time, and closing during a minimise animation writes nonsense. Not
+  reproducible on demand, so what is tested is the decision rather than the event: a
+  restored size below the minimum returns the default, a small-but-usable one is left
+  alone.
+
+### The defect nobody reported
+
+Checking the Chinese pages by eye turned up something none of the six reports mentioned
+and no test could have found, because no test knew to look: every `*emphasised phrase*`
+in the handbook was rendering with the stars visible. The grammar had bold and code and
+not emphasis, and the prose had been written as though it had all three — 396 stars,
+across five of the six languages.
+
+Russian was the one language whose articles never happened to use the form, which is
+why this survived a release: the two languages the book shipped in were checked, and one
+of them was the only one that could not show the fault.
+
+The test written for it asserts on the **output** of the splitter rather than on the
+source text — no run that reaches the page may contain a star or a backtick. A test on
+the source would have needed to know which spellings are legal, which is the same
+knowledge the splitter has, and two copies of that would eventually disagree.
+
+### What was hand-checked
+
+The four things a test cannot see: that the handbook keeps scrolling with the main
+window in the taskbar; that the drop-downs draw an arrow and nothing beside it; that
+the handbook reads correctly in each of the six languages; and that scrolling between
+sections is smooth rather than stepped. The sluggishness turned out to be the search
+recomputing every frame — lowercasing all forty-six articles per frame — which is a
+performance bug found by looking at a window rather than by measuring anything.
+
+### Numbers
+
+| Gate | 1.9.0 | 1.9.1 |
+|---|---|---|
+| unit tests | 278 | **284** |
+| `--selftest dryrun` | 10 checks, 0 failed | 10 checks, 0 failed |
+| `--selftest target` | 8 checks, 0 failed | 8 checks, 0 failed |
+| `--selftest recovery` | 6 checks, 0 failed | 6 checks, 0 failed |
+| `--selftest script=500` | 12 checks, 0 failed | 12 checks, 0 failed |
+| `--selftest simd` | 4 kernels, 0 disagreements | 4 kernels, 0 disagreements |
+| `--selftest churn=120` | 10 482 transitions, held 0 | 10 752 transitions, held 0 |
+| release `.exe` | 10 565 632 B | 10 882 048 B (+308 KB) |
+
+The 308 KB is the handbook in four more languages — a hundred and eighty-four articles
+of prose compiled into the binary, where 1.9.0 had ninety-two.
+
+### The lesson this stage adds to the campaign
+
+Stage 10 recorded that a test must check the effect rather than the flag. This stage
+adds the sharper version: **a test must be able to fail.** The font check was correct
+in shape, correct in intent, and structurally incapable of reporting a fault, and it
+took a person looking at the screen to notice. Every oracle that answers *is this
+right?* now needs its own test that answers *would it say no?*
 
 ---
 
