@@ -7,11 +7,89 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); version
 
 ---
 
-## [1.9.1]
+## [1.9.2]
 
-Six things reported against 1.9.0, and the two that were not what they looked like.
+The other three windows, checked rather than assumed.
+
+1.9.1 fixed a handbook that could not be closed, and the fix was to settle which side
+owns *is it open*. The editor, the variables window and the run history are built the
+same way and were never exercised the same way, so this release does that — by hand,
+one window at a time — and hardens the one place where the same class of fault could
+still occur.
 
 ### Fixed
+
+- **A close could be dropped by a window that was busy.** An extra window's callback
+  takes the application lock with `try_lock` and gives up the frame if it cannot have
+  it, which is right: a dropped frame of drawing is invisible, and blocking would risk
+  a deadlock. But the click on the X was read *inside* that lock, and
+  `close_requested` is true for exactly **one** frame — so a frame that could not draw
+  was also a frame that silently threw the close away, and the window stayed open.
+
+  The close is now read before the lock and parked where the main window drains it on
+  its next pass. Nothing holds either lock while waiting for the other, so the two
+  cannot deadlock.
+
+  This is hardening rather than a fault anybody hit: nothing outside the UI thread
+  takes that lock today, so the `try_lock` does not currently fail. It becomes a real,
+  intermittent *"sometimes the editor will not close"* the first time anything else
+  does — which is exactly the kind of thing that is cheap to prevent and expensive to
+  diagnose. A test asserts the order in the source, because building an `AppInner` and
+  a viewport in a test would assert on a copy of the thing rather than the thing.
+
+### Notes
+
+- **The editor, the variables window and the run history were checked on screen**, each
+  one opened, used, and closed with the main window both open and minimised: the editor
+  across all three of its views, the run history against real entries, the variables
+  window while a run was not going. All three open, stay open with the main window in
+  the taskbar, close on the X, and stay closed. None of them shared the handbook's
+  fault — their open flags are written by the button that opens them and by the close
+  callback, and by nothing else, so there was never a second owner to fight with.
+
+- Nothing about how macros run changed. The format is still 5.
+
+### Testing
+
+- **286 unit tests**, up from 285. The new one asserts that an extra window reads its
+  close before it takes the drawing lock, and parks it rather than acting on it there.
+
+- The full self-test set was run against the release build: `dryrun`, `target`,
+  `recovery`, `script=500`, `simd` and `churn=120`. No failures.
+
+---
+
+## [1.9.1]
+
+Six things reported against 1.9.0, the two that were not what they looked like, and one
+this release introduced and had to fix again before it was done.
+
+### Fixed
+
+- **The handbook could not be closed.** Not by its X, not by F1, not with the main
+  window open — the window shut and came straight back. This one was introduced by the
+  deferred-viewport fix below and reported against 1.9.1 itself.
+
+  Two owners of one fact. The handbook window is deferred, so whether it is up lives in
+  a small shared state; the main window kept its own copy and wrote it back every frame
+  as *if mine, then theirs* — the close set theirs to false, and the next frame of the
+  main window set it to true again before anything reached the screen.
+
+  The window owns it now and the main window only gets to ask: it pushes a change it
+  made itself — exactly the way it already pushed which article to open — and otherwise
+  takes the window's answer. The handshake is a five-line function with a test on each
+  of its transitions, including the one that was inverted.
+
+  It shipped because closing the window is the one thing the 1.9.1 pass never did. The
+  handbook was checked minimised, maximised, in six languages and against its own
+  markup, and every one of those checks left it open.
+
+  **Escape and F1 from inside the handbook were tried and are not there.** A deferred
+  viewport is handed the key *release* and never the press — measured, not assumed:
+  `Key(Escape, false)` arrives and `Key(Escape, true)` does not — so there is nothing
+  for a shortcut to match. Closing on the release would shut the handbook when somebody
+  pressed Escape in another window and let go over this one. **F1** still toggles it
+  from the main window, and the handbook's own X closes it from anywhere.
 
 - **The extra windows froze when the main window was minimised.** The editor, the
   handbook, the variables window and the run history could not be scrolled, moved or
@@ -90,13 +168,14 @@ Six things reported against 1.9.0, and the two that were not what they looked li
 
 ### Testing
 
-- **284 unit tests**, up from 278. The six new ones assert that the glyph check agrees
+- **285 unit tests**, up from 278. The seven new ones assert that the glyph check agrees
   with what the window actually draws; that every character the source draws has a
   glyph in the fonts shipped with the program; that only Chinese text leans on a font
   that comes from Windows; that every topic exists in every one of the six languages;
   that a window restored at a nonsense size comes back at the default while a
-  small-but-usable one is left exactly as it was; and that no article shows its own
-  markup in any of the six languages.
+  small-but-usable one is left exactly as it was; that no article shows its own
+  markup in any of the six languages; and that the handbook window, not the main
+  window, is what decides the handbook is shut.
 
 - The full self-test set was run against the release build: `dryrun`, `target`,
   `recovery`, `script=500`, `simd` and `churn=120`. No failures.
