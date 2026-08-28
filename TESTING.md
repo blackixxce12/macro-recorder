@@ -42,14 +42,100 @@ load, thread interleaving, or hour nine — which is what the rest of this was f
 | 11 | [1.7.0: the matrix, run properly](#stage-11--170-the-matrix-run-properly) | 🖐 | done | ~170 matrix rows driven for real; six defects found and fixed; two phantoms caught before they were reported |
 | 12 | [1.8.0: saying it before it happens](#stage-12--180-saying-it-before-it-happens) | 🔧 🖐 | done | 271 tests; the pre-flight became a gate; 48 matrix rows driven; five defects found, two of them by promoting a diagnostic to a gate and three by looking at panels nobody had looked at |
 | 13 | [1.9.0: the handbook](#stage-13--190-the-handbook) | 🔧 | done | 278 tests; forty-six articles; fifty-one explanatory strings removed and a test that keeps them out |
-| 14 | [1.9.1: the oracle that agreed with itself](#stage-14--191-the-oracle-that-agreed-with-itself) | 🔧 🖐 | done | 284 tests; six reported defects fixed, plus a seventh found by reading the screen; a font check found to have been passing vacuously since it was written |
+| 14 | [1.9.1: the oracle that agreed with itself](#stage-14--191-the-oracle-that-agreed-with-itself) | 🔧 🖐 | done | 285 tests; six reported defects fixed, a seventh found by reading the screen, and an eighth this stage caused itself; a font check found to have been passing vacuously since it was written |
+| 15 | [1.9.2: the question stage 14 ended on](#stage-15--192-the-question-stage-14-ended-on) | 🖐 | done | 286 tests; the editor, variables and run history put through open-use-close with the main window up and minimised; one latent lost-close found by reading |
+
+---
+
+## Stage 15 — 1.9.2: the question stage 14 ended on
+
+🖐 **Result: 285 to 286 tests, and the other three windows put through the sequence the
+handbook was not.**
+
+Stage 14 finished with a lesson: the checks a session performs are shaped by the order it
+does them in, and that order has holes. It then shipped, having asked the question of the
+handbook only. The editor, the variables window and the run history are built from the
+same `extra_window` and had never been opened, used and *closed* on purpose.
+
+So this stage is that sequence, run deliberately rather than incidentally, on each of
+them, with the main window both open and minimised:
+
+| Window | Opens | Alive while the main window is minimised | Closes on the X | Stays closed |
+|---|---|---|---|---|
+| Editor | ✔ | ✔ — all three views, list scrolled, inspector used | ✔ | ✔ |
+| Run history | ✔ | ✔ — real entries, three runs listed | ✔ | ✔ |
+| Variables | ✔ | ✔ — step-mode controls responsive | ✔ | ✔ |
+| Handbook | ✔ | ✔ | ✔ | ✔ |
+
+All four were then opened **together**, the main window minimised, and all four closed one
+after another. Nothing came back.
+
+### Why none of them had the handbook's fault
+
+The handbook's *is it open* had two owners, because a deferred callback cannot borrow the
+application and the flag had to move into shared state. The other three did not need that:
+their callbacks reach the application through the weak handle, so their flags stayed
+ordinary fields, written by the button that opens them and by the close callback, and by
+nothing else. No second owner, nothing to fight with.
+
+That is worth writing down because it is the general shape of the fault: **not "deferred
+viewports are risky" but "two owners of one fact"**. The handbook was the only window that
+acquired a second owner, and it was the only window that broke.
+
+### The one thing that was wrong, and was not visible
+
+Reading the callback with that question in mind found a latent version of the same class.
+The close was read *inside* the `try_lock`:
+
+```rust
+let Some(mut app) = inner.try_lock() else { return };   // gives up the frame
+draw(&mut app, ui);
+if ui.input(|i| i.viewport().close_requested()) { … }   // never reached
+```
+
+`close_requested` is true for exactly one frame. Giving up a frame of *drawing* is
+invisible; giving up the frame the close arrived in leaves a window that will not shut.
+
+It is not reachable today — nothing outside the UI thread takes that lock, so the
+`try_lock` does not fail — and that is exactly why it was worth fixing now rather than
+later: it turns into an intermittent *"sometimes the editor will not close"* on the day
+somebody adds a background thread, and intermittent is the expensive kind. The close is
+read before the lock now and parked for the main window to drain.
+
+The test for it asserts the **order in the source**, which is unusual here and deliberate:
+building an `AppInner` and a viewport inside a test would be asserting on a reconstruction
+rather than on the code that runs.
+
+### Numbers
+
+| Gate | 1.9.1 | 1.9.2 |
+|---|---|---|
+| unit tests | 285 | **286** |
+| `--selftest dryrun` | 10 checks, 0 failed | 10 checks, 0 failed |
+| `--selftest target` | 8 checks, 0 failed | 8 checks, 0 failed |
+| `--selftest recovery` | 6 checks, 0 failed | 6 checks, 0 failed |
+| `--selftest script=500` | 12 checks, 0 failed | 12 checks, 0 failed |
+| `--selftest simd` | 4 kernels, 0 disagreements | 4 kernels, 0 disagreements |
+| `--selftest churn=120` | 10 649 transitions, held 0 | 10 655 transitions, held 0 |
+| release `.exe` | 10 882 048 B | 10 882 560 B |
+
+### The lesson this stage adds to the campaign
+
+Stage 14 said to ask which of the things a person does were never done here. This stage is
+what that costs when you actually pay it: an afternoon of opening and closing four windows,
+one latent defect found by reading with the question in mind, and one table that can be
+pointed at the next time somebody asks whether the extra windows were checked.
+
+The table is the deliverable as much as the fix is. *"Checked"* without a list of what was
+checked is the same claim the font oracle was making in stage 14.
 
 ---
 
 ## Stage 14 — 1.9.1: the oracle that agreed with itself
 
-🔧 🖐 **Result: 278 to 284 tests, and the discovery that a passing font check had been
-passing for the wrong reason since it was written.**
+🔧 🖐 **Result: 278 to 285 tests, the discovery that a passing font check had been
+passing for the wrong reason since it was written, and a regression this stage shipped
+and then had to be told about.**
 
 Six defects were reported against 1.9.0 by someone using it. Four were what they
 looked like. Two were not, and both of those were failures of a *test*, which is the
@@ -118,6 +204,31 @@ source text — no run that reaches the page may contain a star or a backtick. A
 the source would have needed to know which spellings are legal, which is the same
 knowledge the splitter has, and two copies of that would eventually disagree.
 
+### The one this stage caused
+
+The deferred-viewport fix moved *is the handbook up* out of the application and into a
+small shared state, because a deferred callback cannot borrow the application. The main
+window kept its own copy of that flag and wrote it back every frame. Closing the window
+set the shared copy to false; the main window's next frame set it to true again. The
+handbook could not be closed at all, by any means, and it took a report to find out.
+
+Every check in this stage had left the window open. It was checked minimised, maximised,
+in six languages, against its own markup, and for whether its list responded — and not
+one of those needed it to shut afterwards. The gap was not in what was tested but in
+what the sequence of tests happened to require.
+
+What went in with the fix is a five-line function that settles which side owns the fact,
+with an assertion on each of its transitions — including a second press of **?** after a
+close, which is the one a naive fix gets wrong.
+
+Escape and F1 from inside the window were written next, and then taken back out, because
+a probe said they could not work: a deferred viewport is handed `Key(Escape, false)` and
+never `Key(Escape, true)`, so `consume_key` has nothing to match. That is the same
+discipline as the sentinel above — the shortcut *looked* implemented, and a probe on the
+event stream is what separated "implemented" from "does something". Closing on the
+release instead would have shut the handbook when Escape was pressed in another window
+and let go over this one, so the code says why it is absent rather than pretending.
+
 ### What was hand-checked
 
 The four things a test cannot see: that the handbook keeps scrolling with the main
@@ -131,13 +242,13 @@ performance bug found by looking at a window rather than by measuring anything.
 
 | Gate | 1.9.0 | 1.9.1 |
 |---|---|---|
-| unit tests | 278 | **284** |
+| unit tests | 278 | **285** |
 | `--selftest dryrun` | 10 checks, 0 failed | 10 checks, 0 failed |
 | `--selftest target` | 8 checks, 0 failed | 8 checks, 0 failed |
 | `--selftest recovery` | 6 checks, 0 failed | 6 checks, 0 failed |
 | `--selftest script=500` | 12 checks, 0 failed | 12 checks, 0 failed |
 | `--selftest simd` | 4 kernels, 0 disagreements | 4 kernels, 0 disagreements |
-| `--selftest churn=120` | 10 482 transitions, held 0 | 10 752 transitions, held 0 |
+| `--selftest churn=120` | 10 482 transitions, held 0 | 10 649 transitions, held 0 |
 | release `.exe` | 10 565 632 B | 10 882 048 B (+308 KB) |
 
 The 308 KB is the handbook in four more languages — a hundred and eighty-four articles
@@ -146,10 +257,17 @@ of prose compiled into the binary, where 1.9.0 had ninety-two.
 ### The lesson this stage adds to the campaign
 
 Stage 10 recorded that a test must check the effect rather than the flag. This stage
-adds the sharper version: **a test must be able to fail.** The font check was correct
+adds two. The first: **a test must be able to fail.** The font check was correct
 in shape, correct in intent, and structurally incapable of reporting a fault, and it
 took a person looking at the screen to notice. Every oracle that answers *is this
 right?* now needs its own test that answers *would it say no?*
+
+The second came out of the regression above: **the checks a session performs are shaped
+by the order it does them in, and that order has holes in it.** Six ways of exercising
+the handbook all happened to leave the window open, so the one action nobody performed
+was the one that was broken. Neither more tests nor more careful ones would have found
+it — what finds it is asking, at the end, which of the things a person does with this
+were never done here.
 
 ---
 
