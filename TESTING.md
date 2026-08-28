@@ -44,6 +44,114 @@ load, thread interleaving, or hour nine — which is what the rest of this was f
 | 13 | [1.9.0: the handbook](#stage-13--190-the-handbook) | 🔧 | done | 278 tests; forty-six articles; fifty-one explanatory strings removed and a test that keeps them out |
 | 14 | [1.9.1: the oracle that agreed with itself](#stage-14--191-the-oracle-that-agreed-with-itself) | 🔧 🖐 | done | 285 tests; six reported defects fixed, a seventh found by reading the screen, and an eighth this stage caused itself; a font check found to have been passing vacuously since it was written |
 | 15 | [1.9.2: the question stage 14 ended on](#stage-15--192-the-question-stage-14-ended-on) | 🖐 | done | 286 tests; the editor, variables and run history put through open-use-close with the main window up and minimised; one latent lost-close found by reading |
+| 16 | [1.9.3: the window that never slept](#stage-16--193-the-window-that-never-slept) | 🔧 | done | 287 tests; clippy clean across all targets; idle repaint 8.8 fps to 0.25 and idle CPU 1.6 % to 0.2 %; three lock faults of one kind found on the way |
+
+---
+
+## Stage 16 — 1.9.3: the window that never slept
+
+🔧 **Result: 286 to 287 tests, an idle window taken from 8.8 frames per second to 0.25,
+and three lock faults of one kind found while looking for it.**
+
+Stage 15 asked which of the things a person does had never been done here. This stage
+asks the same question of the machine: what does the program do when *nobody* is doing
+anything? The answer was that it repainted ten times a second, forever.
+
+### What was found by watching rather than by reading
+
+eframe's `inspection` feature was switched on in `Cargo.toml` for this stage, which makes
+a build serve the egui inspection protocol on `127.0.0.1:5719` when launched with
+`EGUI_INSPECTION=1`. That protocol's `GetTree` reply carries a monotonic frame counter —
+so sampling it twice, ten seconds apart, measures the real frame rate of a window that
+is doing nothing.
+
+It read 88 frames in ten seconds. The cause was one line at the end of `ui()`: an
+unconditional `request_repaint_after(100ms)`, there because the state the window shows
+is written by six other threads and polling was the only way it knew to notice.
+
+This is worth recording as a *method*, not just a fix. Nothing in the source looks
+wrong; the line is one call with a plausible comment. It took an instrument that could
+count frames from outside the process to turn "the UI seems fine" into a number.
+
+### The three faults found on the way
+
+All three are the same Rust rule, which is why they are grouped here: **a temporary
+lives to the end of the enclosing expression, not to the end of the sub-expression that
+built it.**
+
+| Where | Written as | Actually held until |
+|---|---|---|
+| `PENDING_CLOSES` | `for c in take(&mut *LOCK.lock())` | the end of the loop — every handler |
+| called-macro path | `if let Some(d) = path.lock().as_ref()...` | the end of the `if let` body |
+| mouse hook | two `Mutex<i32>` for one position | — (a different fault: a lock at all) |
+
+The first is the one that matters, because the doc comment on `PENDING_CLOSES` states
+the invariant the code did not have: *"nothing holds this while waiting for the
+application lock."* It did. The comment was written from the intent and the code was
+read as if it matched.
+
+The third is not a lifetime bug but a design one, and it is the more dangerous of the
+two: `WH_MOUSE_LL` runs on every movement of the pointer anywhere on the desktop and is
+silently unhooked if it dawdles, and the UI thread took the same two mutexes in
+`start_recording`. One `AtomicU64` with both coordinates packed in replaces them.
+
+### The test that was checked against the broken code
+
+The regression test for the first fault asserts on the **source**, as stage 15's did —
+building an `AppInner` and a viewport in a test would assert on a reconstruction. But
+this one was then run against the reverted code to confirm it fails on it. A source
+assertion that passes on both versions is worse than no test, because it reads like
+cover. Stage 14's lesson was a check that could not fail; this is the cheap way to not
+repeat it.
+
+### The measurement that came back negative
+
+The pixel-to-grey conversion was rewritten to `as_chunks`, dropping four bounds checks
+per pixel and a 15 MB zeroing pass per call. Four rounds of `--selftest vision`
+interleaved between the two builds put every size inside the run-to-run spread.
+
+The negative result is kept in the changelog and in the source comment, because it says
+where the time in an image search actually is: in correlating the pixels, not in reading
+them. That is a claim the next person to optimise this can act on, and it cost four
+rounds to establish. A wash that is written down is worth more than a wash that is
+quietly reverted.
+
+### Numbers
+
+| Gate | 1.9.2 | 1.9.3 |
+|---|---|---|
+| unit tests | 286 | **287** |
+| `cargo clippy --all-targets` | ~12 warnings (test module) | **0** |
+| idle frames per second | 8.8 | **0.25** |
+| idle CPU, release | 1.56 %, 1.64 % of a core | **0.00 %–0.26 %, median 0.00 %** |
+| `--selftest dryrun` | 10 checks, 0 failed | 10 checks, 0 failed |
+| `--selftest target` | 8 checks, 0 failed | 8 checks, 0 failed |
+| `--selftest recovery` | 6 checks, 0 failed | 6 checks, 0 failed |
+| `--selftest script=500` | 12 checks, 0 failed | 12 checks, 0 failed |
+| `--selftest timing` p99 | — | 1–22 µs over two runs, no drift, no burst |
+| `--selftest simd` | 4 kernels, 0 disagreements | 4 kernels, 0 disagreements |
+| `--selftest churn=120` | 10 655 transitions, held 0 | 10 807 transitions, held 0 |
+| release `.exe` | 10 882 560 B | **10 879 488 B** |
+
+**The instrument was taken back out before the release.** eframe's `inspection` feature
+is what made this stage possible, and it costs 830 976 B of msgpack and AccessKit
+machinery to serve a port a shipped build never opens. It was carried through the
+investigation and removed before the final build, which is why 1.9.3 is 3 072 B
+*smaller* than 1.9.2 rather than 828 KB larger. Adding it back is one word in
+`Cargo.toml`; the README says where.
+
+That is the shape to keep: an instrument earns its place while it is being used and has
+to justify itself again before it ships. Measuring the idle frame rate needed a debug
+port. Distributing a binary does not.
+
+### The lesson this stage adds to the campaign
+
+Stage 15 said that *"checked"* without a list of what was checked is not a claim. This
+stage adds the other half: some properties cannot be checked by looking at all. Idle
+cost, frame rate and lock hold time are invisible in a diff and obvious to an
+instrument. Before asking whether the code is right, it is worth asking whether there is
+a number that would say so — and, for a GUI, whether anything outside the process can
+count its frames.
 
 ---
 
