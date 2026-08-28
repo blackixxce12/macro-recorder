@@ -45,6 +45,117 @@ load, thread interleaving, or hour nine — which is what the rest of this was f
 | 14 | [1.9.1: the oracle that agreed with itself](#stage-14--191-the-oracle-that-agreed-with-itself) | 🔧 🖐 | done | 285 tests; six reported defects fixed, a seventh found by reading the screen, and an eighth this stage caused itself; a font check found to have been passing vacuously since it was written |
 | 15 | [1.9.2: the question stage 14 ended on](#stage-15--192-the-question-stage-14-ended-on) | 🖐 | done | 286 tests; the editor, variables and run history put through open-use-close with the main window up and minimised; one latent lost-close found by reading |
 | 16 | [1.9.3: the window that never slept](#stage-16--193-the-window-that-never-slept) | 🔧 | done | 287 tests; clippy clean across all targets; idle repaint 8.8 fps to 0.25 and idle CPU 1.6 % to 0.2 %; three lock faults of one kind found on the way |
+| 17 | [1.9.4: ten optimisations, and the one that was not on the list](#stage-17--194-ten-optimisations-and-the-one-that-was-not-on-the-list) | 🔧 | done | 288 tests; nine of ten proposals refused on measurement, two on arithmetic alone; two built and removed for never firing; the real saving turned out to be a pre-flight warning |
+
+---
+
+## Stage 17 — 1.9.4: ten optimisations, and the one that was not on the list
+
+🔧 **Result: 287 to 288 tests, nine proposals refused on measurement, and the largest
+saving in the program found to be a setting nobody was told to change.**
+
+A list of ten ways to make the image search faster was put to this release. The stage
+is what happened when each was checked rather than accepted.
+
+### What the ten came to
+
+| # | Proposal | Outcome |
+|---|---|---|
+| 1–2 | Integral images for `shrink` / `shrink_mask` | **Refused on arithmetic.** Box shrink already reads each source pixel once; the proposal counts `W·H·step²` where the truth is `W·H` |
+| 3 | Sparse masked correlation | **Not acted on.** Feasible, but nothing measures whether transparent templates are common enough to matter |
+| 4 | Better coarse descriptor | **Partly present already** as the edge mode; the failure it targets is what `COARSE_KEEP = 4` fixed |
+| 5–6 | Integral images for `sum_i` / `sum_ii` | **Refused twice.** Saves 2 of 3 arithmetic ops and 0 of 2 loads; and f32 integrals destroy the precision the 0..1 scaling exists to protect |
+| 7 | Damage regions | **Built the instrument, refused the feature.** One rectangle, the whole desktop, every frame |
+| 8 | Adaptive thread count | **Priced, and the fear does not hold.** `rows / 48` already caps it at 3–5 |
+| 9 | AVX-512 at more sizes | **Micro**, as the proposal itself says |
+| 10 | The chain as a whole | Two links already present, one refuted, one with nothing to work with |
+
+Two were refutable with a pencil. That is worth saying on its own: the expensive part
+of this stage was not the measuring, it was reading the existing code closely enough to
+notice that `(W/step)·(H/step)·step²` is `W·H`.
+
+### The two that were built and then removed
+
+Both deserve recording, because both looked right and both failed for the same reason:
+**a mechanism that works is not a mechanism that fires.**
+
+*Whole-frame reuse.* Desktop Duplication says when nothing has changed, and on an
+unchanged frame the program was searching byte-identical pixels. A frame serial and a
+cached answer were added. The serial demonstrably holds across two back-to-back
+captures — and **0 of 16 polls** at the 120 ms a wait sleeps, and 0 of 16 at 16 ms. A
+desktop sends a frame for any pixel anywhere. Three interleaved rounds: no saving.
+
+*Damage regions.* The right answer to the above, and instrumented properly — dirty
+rects **and** move rects, because a move vacates its source as well as filling its
+destination. DXGI here reports **one rectangle covering the whole desktop, every
+frame, at both intervals**. No skip was written: it would have been the first failure
+again, with more code and a stale-answer risk that ends in a click on the wrong thing.
+
+### What was kept, and why it is not dead code
+
+The collection and the numbers stayed, in `--selftest vision`:
+
+- does a frame survive the poll interval, at 120 ms and 16 ms;
+- rectangles per frame and the share of the desktop they cover;
+- **whether the damage report can be believed** — two frames compared in full,
+  counting pixels that changed outside every rectangle DXGI named;
+- what the coarse pass's threads are worth, which had never been timed.
+
+On a machine whose compositor localises its damage, these say so, and half the feature
+is already written. That is the difference between "we think this will not help" and
+"run one command and see". The project already keeps `probe_blt_ddb` and
+`probe_blt_mem` on exactly those terms.
+
+### The thing that was actually worth doing
+
+None of the ten. The measurements say a full-screen search costs ~11 ms against
+~1.2 ms in a 320×240 rectangle — close to linear in area — and that a ten-second
+`Wait for image` across the whole screen costs **1.8–2.3 s of CPU**. The cure has been
+in the program since 1.5.0: say where to look.
+
+So the pre-flight now says so, with the number of looks the wait will really make. It
+is a warning rather than an optimisation because the fix belongs to the person writing
+the macro, costs one dropdown, and is worth an order of magnitude — more than every
+proposal above put together.
+
+The count comes from `WAIT_POLL_MS`, now a named constant used by all four wait loops,
+so the forecast cannot drift from the engine it forecasts.
+
+### Numbers
+
+| Gate | 1.9.3 | 1.9.4 |
+|---|---|---|
+| unit tests | 287 | **288** |
+| `cargo clippy --all-targets` | 0 | 0 (one documented `allow`, see below) |
+| coarse-pass threading, 16 cores | *never measured* | **1.73× / 1.41× / 1.08× / 0.99×** at 32/64/128/256 px |
+| frame unchanged across a 120 ms poll | *never measured* | **0 of 16** |
+| damage rectangles per frame | *never measured* | **1, covering 100 % of the desktop** |
+| `--selftest dryrun` | 10 checks, 0 failed | 10 checks, 0 failed |
+| `--selftest target` | 8 checks, 0 failed | 8 checks, 0 failed |
+| `--selftest recovery` | 6 checks, 0 failed | 6 checks, 0 failed |
+| `--selftest script=500` | 12 checks, 0 failed | 12 checks, 0 failed |
+| `--selftest simd` | 4 kernels, 0 disagreements | 4 kernels, 0 disagreements |
+| `--selftest churn=120` | 10 807 transitions, held 0 | 10 807 transitions, held 0 |
+| release `.exe` | 10 879 488 B | 10 910 208 B |
+
+`clippy::missing_const_for_thread_local` is a false positive in Rust 1.98 — it fires on
+initializers that already are `const`, reproduced on a twelve-line crate. It named ten
+blocks here, all already correct. A crate-level `allow` restores the clean run without
+touching them. This is the case the project's "clippy is not a gate" rule was written
+for, arriving exactly as predicted.
+
+### The lesson this stage adds to the campaign
+
+Stage 16 said some properties cannot be checked by looking, only by instrument. This
+one adds the sharper form: **an instrument that proves a mechanism works has not shown
+that the mechanism fires.** The frame serial was correct on the first try and the
+damage collection was correct on the first try. Both were useless, and only a
+measurement of *how often the favourable case occurs* could tell the difference.
+
+The order to work in follows from that. Before building an optimisation, measure how
+often its best case happens. Two builds and an afternoon were spent learning that the
+answer was zero — which is cheap, and cheaper still next time, because the answer is
+now one command.
 
 ---
 
