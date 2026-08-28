@@ -493,6 +493,8 @@ Every image step and image condition carries its own **search area**: the whole 
 | 400×300 | 0.6 ms | 1.2 ms | 1.7 ms | 584 |
 | 200×150 | 0.1 ms | 0.5 ms | 0.6 ms | 1582 |
 
+Waiting is where this bites hardest, because a wait repeats the search. A `Wait for image` looks again every 120 ms until its picture turns up, so thirty seconds of waiting across the whole screen is 250 full-screen searches — measured end to end, a ten-second full-screen wait costs 1.8–2.3 s of processor. Since 1.9.4 **Check macro** says so, and says how many looks the wait will make; bounding the area is a change of one dropdown and the table above is what it buys.
+
 **Relative to another picture** is the one no threshold can replace. A row of identical buttons is identical; which one to press is decided by the heading above it, and an anchor is how a script says so.
 
 The capture column is what 1.5.0 changed, and the change is larger than the search itself now. See [How a capture got twenty times cheaper](#how-a-capture-got-twenty-times-cheaper).
