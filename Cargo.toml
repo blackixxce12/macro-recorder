@@ -1,6 +1,6 @@
 [package]
 name = "macro-recorder"
-version = "1.9.2"
+version = "1.9.3"
 edition = "2024"
 rust-version = "1.98.0"
 description = "A modern, DPI-aware macro recorder that records straight into image-matched steps, with Desktop Duplication capture, native Windows 11 Mica/Acrylic, Virtual Desktop isolation, and secure shutdown"
@@ -16,6 +16,11 @@ winocr = []
 
 [dependencies]
 # GUI & Serialization
+# `inspection` is deliberately absent. It compiles egui's inspection protocol and
+# its msgpack/accesskit dependencies into the binary - about 830 KB - to serve a
+# debug port that a shipped build never opens. Add it back to this list to drive
+# the running UI from outside (see "Inspecting the live UI" in the README); take
+# it out again before a release.
 eframe = { version = "0.36", default-features = false, features = ["default_fonts", "glow", "persistence", "wayland", "x11"] }
 egui = "0.36"
 serde = { version = "1.0.229", features = ["derive"] }
