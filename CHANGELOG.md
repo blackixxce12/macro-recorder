@@ -7,6 +7,305 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); version
 
 ---
 
+## [1.9.5]
+
+A display over the game, a timeline of every run, and a video of what happened.
+
+Two things this release does not do are worth saying first. It does not measure frame
+rate — that needs an ETW session against the DXGI providers, which needs administrator
+rights, and the reasons are in the `perf` module and have not changed. And the
+VirusTotal badges are gone from both READMEs, along with the argument built on them.
+
+### Added
+
+- **A heads-up display, drawn over everything, that keeps working with this window in
+  the tray.** That last part is the point: the thing being watched is a game in front
+  of it, and a display that vanished when the window was minimised would be a display
+  nobody could use.
+
+  Four blocks, each shown only when it has something to say:
+
+  ```
+  RESPONSE          MACRO             RELIABILITY       STATE
+  142 FPS           farm              Fallbacks 2       REC       --
+  96 1% low         Run       17      Recovery  0       RUN       PLAYING
+  71 0.1% low       Step      42/86   OCR retry 1
+  7.0 ms                              Missed    0
+  max  48.2 ms
+  hitches 3
+  ```
+
+  Five presets — off, minimal, responsiveness, automation, everything — and four
+  corners. Off by default, and it costs a relaxed atomic load per step when it is.
+
+  **`RESPONSE`, not `GAME`, and the heading is doing real work.** What is under it is
+  how quickly the target window answers an empty message, not how long anything took to
+  render. The `perf` module has said so since it was written; a number labelled FPS with
+  no heading over it would be a claim this program cannot make.
+
+  The overlay it draws in already existed, already ran on its own thread with its own
+  message loop, and already redrew only when there was something new. All three of those
+  are why this is a small change rather than a subsystem — and the third one is now
+  enforced for the display too: the state block is rewritten on every pass of the window,
+  and the sequence moves only when the words actually differ. Comparing four short
+  vectors is cheaper than one repaint of a layered surface.
+
+- **A timeline of every run.** Each step now leaves a mark — when it began, where it
+  sat, and which step it was — and the run history shows them under the run they belong
+  to:
+
+  ```
+  Timeline: 12 steps
+    00:00.000    303 ms  #0   Wait 300 ms
+    00:00.303    504 ms  #1   Wait 500 ms
+    00:41.220   1314 ms  #5   Click image: claim
+  ```
+
+  A step's length is the gap to the next mark, so nothing is written twice and the two
+  numbers cannot disagree. Marks are three integers and no text — a night macro makes a
+  great many of them — and how each step reads is worked out from the macro afterwards,
+  by the step's id, which is what survives somebody inserting a line above it. Slow steps
+  are coloured, and the one that ended a failed run is coloured differently.
+
+  The last twenty thousand marks are kept rather than the first, because a run that fails
+  at hour nine is one whose beginning nobody needs; the record says how many fell off the
+  front so a timeline can never quietly present itself as the whole run.
+
+  Positions read as `mm:ss.mmm`, which is how a video player writes one.
+
+- **Screen recording, to H.264, alongside a macro recording.** Off by default. Tick it
+  and pressing Record writes a video into `recordings/` for as long as the macro
+  recording lasts.
+
+  Through Media Foundation, which is what makes this a few hundred lines instead of
+  three vendor SDKs: NVENC, AMF and Quick Sync are all registered with it as transforms,
+  so asking for hardware gets whichever the machine has, and a machine with none falls
+  back to software without the caller knowing. No third-party dependency, and the same
+  `windows` crate every other call in this program goes through.
+
+  Measured on a 2560×1440 desktop: 30 frames a second, none missed, about 1.8 s of
+  set-up before the first frame while the encoder is negotiated. `--selftest record=N`
+  records for N seconds and checks what came out.
+
+### Fixed
+
+- **Three bugs in the recorder, each found by checking the file rather than the code.**
+  They are worth listing because each one produced a file that looked fine from the
+  outside:
+
+  1. **No index at all.** The first version asked for `MF_MPEG4SINK_MOOV_BEFORE_MDAT` in
+     the belief that it produced a crash-resistant fragmented MP4. It does not, and what
+     it produced here was `ftyp uuid mdat` and **no `moov`** — eleven megabytes of
+     picture that no player will open. The self-test now looks for the `moov` box; the
+     check it had before, which read the first four bytes, passed that file happily.
+
+  2. **Time from a frame counter.** Stamping frame *n* at *n*/30 s describes six seconds
+     of screen as four seconds of video, played half again too fast.
+
+  3. **And stamping with the clock did not fix it**, which is the interesting one: the
+     duration a player reports comes from the declared frame rate and the number of
+     frames, not from the times on the samples. The stream has to genuinely be a
+     constant rate, so a capture that takes longer than one frame now writes the frame
+     it did get once per slot that passed. The picture is copied once and the sample
+     re-timed, so a repeat costs no second copy of fifteen megabytes.
+
+  The proof is arithmetic on the file: 6.27 s of video for 6.25 s of recording.
+
+- **A measurement that read as a bug and was not.** The recorder appeared to manage only
+  21 frames a second until the setup time was counted separately — 1.8 s of Media
+  Foundation and encoder negotiation was being charged to the recording. It does 30.
+  Both numbers are published now, because anything lining a video up against a timeline
+  needs to know about that 1.8 s too.
+
+### Changed
+
+- **The whole-screen wait warning is now judged on cost rather than on the clock.** It
+  used to fire on any full-screen image wait longer than three seconds, which got both
+  ends wrong: two and a half seconds on a 4K desktop is expensive and five seconds inside
+  a 320×240 rectangle is nothing.
+
+  It now multiplies the area by the number of looks the engine will really make, and
+  shows the working:
+
+  ```
+  ⚠ #0 waiting for this picture costs: 250 × 11 ms ≈ 2.8 s / 30 s
+  ```
+
+  Looks × cost of one ≈ processor time / the wait it sits in — which is the combination
+  that matters, because the wall clock is what the person experiences and the processor
+  time is what the machine pays. The per-search figure comes from a straight line through
+  the points `--selftest vision` prints; on the desktop it was checked on, the model said
+  11 ms and the measurement said 11.3.
+
+- **The VirusTotal section is gone from both READMEs**, badges, scan table, hash list and
+  the "69 of 71 vendors" notice with it. In its place is a security section that says the
+  same true things without a number that has to be re-earned every release: the source is
+  open, here is how to check a download's hash, and here is every capability the program
+  asks the operating system for and why. The honest note that input injectors get flagged
+  stays — it cites nothing and is still true.
+
+### Testing
+
+- **288 unit tests.** The wait-cost rule is covered on all four of its edges: it fires on
+  thirty seconds across a 1440p desktop with the engine's own count, fires on two and a
+  half seconds across 4K, stays quiet on five seconds inside a small rectangle, and stays
+  quiet when the area is one it cannot size.
+
+- The display was checked on screen rather than reasoned about, and the checking found
+  two defects. The first version drew `●`, `▶` and `■` as empty boxes, because the
+  fixed-pitch face that keeps the columns from dancing has no such glyphs; it uses words
+  now. The second bumped its sequence on every write, so a layered window repainted ten
+  times a second to draw the same words — the flicker the overlay's own redraw rule
+  exists to prevent. Two screenshots five seconds apart, showing `Step 2/8` and then
+  `Step 6/8`, are what proved the fix for the second did not freeze the first.
+
+- The full self-test set was run against the release build: `dryrun` (10 checks),
+  `target` (8), `recovery` (6), `script=500` (12), `timing`, `vision`, `simd` and
+  `churn=120`. No failures.
+
+---
+
+## [1.9.4]
+
+Ten optimisations, measured. One survived, and it was not any of them.
+
+A list of ten ways to make the image search faster was put to this release. Nine were
+measured and refused, two of them on arithmetic alone. What the measuring found
+instead is that the largest cost in a script is not in the search at all — it is in
+searching *the whole screen* over and over while waiting for something to appear, and
+the cure for that has been in the program since 1.5.0 and nobody is told to use it.
+
+So this release says so. It also keeps the instruments, because a refusal is only
+worth having if the next person can re-check it in one command.
+
+Nothing about how macros record or run changed. The format is still 5.
+
+### Added
+
+- **The pre-flight now warns about a long wait for a picture across the whole
+  screen**, and says how many looks that will be.
+
+  A wait polls every 120 ms until its picture turns up. A full-screen look costs about
+  **11 ms** on a 2560×1440 desktop against **1.2 ms** inside a 320×240 rectangle —
+  close to linear in the area — so a thirty-second full-screen wait is 250 searches
+  and seconds of processor spent deciding, over and over, that nothing has appeared
+  yet. Measured end to end: a ten-second wait costs **1.8–2.3 s of CPU**.
+
+  Telling it where to look is a change of one dropdown and is already supported —
+  `Rect`, `Active window`, `Near where it was last`. That is why this is a warning and
+  not an optimisation: the fix is the user's to make, costs nothing, and is worth an
+  order of magnitude.
+
+  It is deliberately quiet below three seconds, where the repetition is a dozen looks
+  and nobody needs the advice, and quiet whenever the area is already bounded. The
+  count it prints is the timeout divided by the engine's own poll interval, which is
+  now a named constant used by all four wait loops — a forecast that had drifted from
+  the thing it forecasts would be worse than none.
+
+### Changed
+
+- **`--selftest vision` reports what the screen actually does**, which is what turned
+  three plausible optimisations into three refusals:
+
+  - whether a frame survives the interval a wait sleeps for, at 120 ms and at 16 ms;
+  - how the compositor localises its damage — rectangles per frame and the share of
+    the desktop they cover;
+  - whether that damage report can be believed, by comparing two frames in full and
+    counting pixels that changed *outside* every rectangle DXGI named;
+  - what the coarse pass's threads are actually worth, which had never been timed.
+
+  All of it is printed rather than asserted: these are properties of a machine, not of
+  this code. On another GPU the numbers may say the opposite, and then the answers
+  below change with them.
+
+### Performance
+
+*Nothing here got faster. This section is what was measured and refused, so the next
+attempt starts from the numbers rather than from the same reasoning.*
+
+- **Integral images for `shrink` / `shrink_mask` — refused on arithmetic.** The
+  proposal counts `step²` work per coarse pixel and concludes the pass is expensive.
+  There are `(W/step) × (H/step)` coarse pixels, so that is `W × H` in total: box
+  shrink already reads every source pixel exactly once, in one linear pass. A summed-
+  area table needs a full `W × H` pass to build, plus 15 MB, before it can answer
+  anything — strictly more work. No measurement needed to decline this one.
+
+- **Integral images for `sum_i` and `sum_ii` — refused, twice over.** The target is
+  right: the correlation is where the time is. But `dot(I,T)` has to load every pixel
+  of the window regardless, and the kernel already accumulates all three sums in one
+  pass — per 16-float vector that is two loads and three arithmetic operations.
+  Removing two of the three removes no loads at all, so the ceiling is around 1.5× on
+  the fine pass rather than a multiple.
+
+  The second reason is fatal on its own: the planes are scaled to 0..1 rather than
+  0..255 precisely because `di = sum_ii - n·mi·mi` is a catastrophic-cancellation
+  form. An f32 integral over 3.7 M pixels reaches ~2²¹·⁸, where one ulp is about 0.4,
+  and recovering a 32×32 window's sum as a difference of two such numbers reintroduces
+  exactly the precision loss that scaling exists to prevent. f64 integrals would be
+  30 MB each, so the working set is ~75 MB rather than the 45 MB the proposal
+  estimates.
+
+- **Skipping a search when the screen has not changed — built, measured, removed.**
+  Desktop Duplication says when nothing has moved, and on an unchanged frame the
+  program was doing a full readback and a full search over byte-identical pixels. A
+  frame serial and a cached answer were added, keyed on the template set, the exact
+  rectangle and the edge mode.
+
+  It never fired. **The frame was unchanged 0 times out of 16** across the 120 ms a
+  wait sleeps — and 0 of 16 at 16 ms, so it is not frames piling up between polls. A
+  desktop sends the compositor a frame for any pixel anywhere: a clock, a caret, a
+  notification. Three interleaved rounds of a ten-second wait showed no saving, and
+  the cache was removed.
+
+- **Damage regions — the right idea, and it has nothing to work with here.** The
+  weaker whole-frame version having failed, the strong one was instrumented properly:
+  `GetFrameDirtyRects` *and* `GetFrameMoveRects`, because a move changes its
+  destination and vacates its source and counting only one would call a region
+  untouched when a window had just slid off it.
+
+  On this machine DXGI reports **one rectangle, covering the entire desktop, on every
+  frame, at both intervals**. There is no locality to exploit, so no skip was written:
+  it would have been the whole-frame cache again, with more code and a stale-answer
+  risk that ends in a click on the wrong thing. The collection and the numbers stayed,
+  so a machine whose compositor does localise its damage can be recognised in one
+  command — and half the feature is then already written.
+
+- **Threading was priced for the first time.** The `vs 1 thread` column compared the
+  *answer*, never the time. It now does both. On sixteen logical cores the coarse pass
+  buys **1.73× at 32×32, 1.41× at 64×64, 1.08× at 128×128 and 0.99× at 256×256**.
+
+  The feared oversubscription cannot happen: `threads = (rows / 48).clamp(1, cores)`
+  yields three to five in practice, not sixteen, and only one macro plays at a time.
+
+- **Sparse masked correlation, and a better coarse descriptor**, are the two proposals
+  still standing on their merits and neither is acted on. The first needs evidence that
+  transparent templates are common, which nothing collects: a screen grab has no alpha
+  at all, so masks exist only for hand-cropped PNGs. The second is partly already here
+  as the edge mode, and the failure it aims at — thin structure vanishing under an
+  aggressive shrink — is what `COARSE_KEEP = 4` was introduced to fix, with a test and
+  a measurement behind it.
+
+### Fixed
+
+- **`clippy::missing_const_for_thread_local` is a false positive in Rust 1.98**, firing
+  on initializers that already are `const` — reproduced on a twelve-line crate with
+  nothing in it but two `const {}` statics. It named ten blocks here, all already
+  written the way it asks. A crate-level `allow` with that explanation restores a clean
+  `cargo clippy --all-targets` without touching correct code, and is worth re-checking
+  when the toolchain moves.
+
+### Testing
+
+- **288 unit tests**, up from 287. The new one covers all three sides of the warning:
+  it fires on a thirty-second full-screen wait with the count the engine will really
+  make, stays quiet when the area is bounded, and stays quiet below three seconds.
+
+- The full self-test set was run against the release build: `dryrun` (10 checks),
+  `target` (8), `recovery` (6), `script=500` (12), `timing`, `vision`, `simd` and
+  `churn=120`. No failures.
+
+---
+
 ## [1.9.3]
 
 The window learns to sleep.
