@@ -46,6 +46,119 @@ load, thread interleaving, or hour nine — which is what the rest of this was f
 | 15 | [1.9.2: the question stage 14 ended on](#stage-15--192-the-question-stage-14-ended-on) | 🖐 | done | 286 tests; the editor, variables and run history put through open-use-close with the main window up and minimised; one latent lost-close found by reading |
 | 16 | [1.9.3: the window that never slept](#stage-16--193-the-window-that-never-slept) | 🔧 | done | 287 tests; clippy clean across all targets; idle repaint 8.8 fps to 0.25 and idle CPU 1.6 % to 0.2 %; three lock faults of one kind found on the way |
 | 17 | [1.9.4: ten optimisations, and the one that was not on the list](#stage-17--194-ten-optimisations-and-the-one-that-was-not-on-the-list) | 🔧 | done | 288 tests; nine of ten proposals refused on measurement, two on arithmetic alone; two built and removed for never firing; the real saving turned out to be a pre-flight warning |
+| 18 | [1.9.5: the display, and what checking it on screen cost](#stage-18--195-the-display-and-what-checking-it-on-screen-cost) | 🔧 🖐 | done | 291 tests; a heads-up display, a run timeline and H.264 screen recording; two defects found only by screenshot and three more only by parsing the video file |
+
+---
+
+## Stage 18 — 1.9.5: the display, and what checking it on screen cost
+
+🔧 🖐 **Result: 291 tests, a heads-up display, a timeline of every run, H.264 screen
+recording — and five defects that only came out by looking at what was produced rather
+than at the code that produced it.**
+
+A list of four features was put to this release. One of them — an overlay showing FPS,
+1 % low, 0.1 % low and frame time — rested on a premise the code refutes at length:
+this program does not measure frame rate and cannot. That is in the `perf` module,
+with the reason (an ETW session against the DXGI providers, and administrator rights).
+
+Reading the rest of the proposal against the code was most of the work, and it came out
+better than expected. Three things it asks for were already there and two of them were
+already stricter than asked:
+
+| Asked for | Found |
+|---|---|
+| Overlay independent of the main window | Already a layered Win32 window on its own thread with its own message loop |
+| "1 % low and 0.1 % low must not be computed carelessly" | Already the **mean of the worst tail**, not a percentile — the comment explains that the 99th of a hundred samples excludes the very worst, which is the one the reader wants |
+| A stutter threshold the user picks (33 / 50 / 100 ms) | Already **adaptive** — twice the average, floored at average + 8 ms — because a fixed 33 ms would call ordinary noise a hitch on a window that answers in 200 µs |
+
+So the feature was mostly plumbing telemetry that already existed into a window that
+already existed. That is the useful shape of this stage: **most of the proposal was
+already implemented, and finding that out was cheaper than building it again.**
+
+### What the screen showed that the compiler could not
+
+The display compiled, the overlay window came up — the log said so — and the first
+screenshot showed nothing at all.
+
+That was the *instrument* lying, not the code: `CopyFromScreen` does not capture
+layered windows without `CAPTUREBLT`, and the .NET wrapper will not accept that flag.
+A DPI-aware `BitBlt` with `SRCCOPY | CAPTUREBLT` showed the display had been there the
+whole time. Worth writing down, because the next person to photograph this overlay will
+hit it too.
+
+With a working camera, two real defects appeared immediately:
+
+1. **Three glyphs drew as empty boxes.** `●`, `▶` and `■`, in the fixed-pitch face
+   chosen so that changing numbers do not shuffle the column — and a fixed-pitch face
+   has no dots or triangles. Words now.
+
+2. **The sequence moved on every write.** The state block is rewritten on every pass of
+   the main window, so a layered surface was being repainted ten times a second to draw
+   identical words. That is precisely the flicker the overlay's own redraw rule was
+   written to prevent, reintroduced by a new writer that did not know about it. It now
+   compares before writing.
+
+The fix for the second could easily have frozen the first, so the proof is two
+screenshots five seconds apart showing `Step 2/8` and then `Step 6/8`.
+
+### The warning that learned to count
+
+1.9.4 warned about a whole-screen image wait longer than three seconds. That threshold
+was a guess about the clock, and a timeout is not a cost. It now multiplies the searched
+area by the number of looks the engine will really make, so the two cases the old rule
+got backwards come out right: 2.5 s across 4K is dear and says so, 5 s inside a 320×240
+rectangle is nothing and stays quiet.
+
+The estimate is a straight line fitted to the points `--selftest vision` already prints.
+It predicted 11 ms on the desktop it was checked against; the measurement was 11.3.
+
+### Numbers
+
+| Gate | 1.9.4 | 1.9.5 |
+|---|---|---|
+| unit tests | 288 | **291** |
+| `cargo clippy --all-targets` | 0 | 0 |
+| `--selftest dryrun` | 10 checks, 0 failed | 10 checks, 0 failed |
+| `--selftest target` | 8 checks, 0 failed | 8 checks, 0 failed |
+| `--selftest recovery` | 6 checks, 0 failed | 6 checks, 0 failed |
+| `--selftest script=500` | 12 checks, 0 failed | 12 checks, 0 failed |
+| `--selftest simd` | 4 kernels, 0 disagreements | 4 kernels, 0 disagreements |
+| `--selftest record` | *(new)* | 8 checks, 0 failed |
+
+### The recorder, and three files that looked fine
+
+Screen recording went in through Media Foundation, which is what turns three vendor SDKs
+into a few hundred lines: NVENC, AMF and Quick Sync are all registered with it, so one
+request gets whichever the machine has.
+
+It produced three wrong files before a right one, and **every one of them passed the
+check that existed at the time**:
+
+| What was wrong | What the file looked like | What caught it |
+|---|---|---|
+| `MF_MPEG4SINK_MOOV_BEFORE_MDAT` does not make a fragmented MP4 | 11 MB, correct `ftyp`, **no `moov`** — unopenable | Parsing the top-level boxes |
+| Time stamped from a frame counter | Six seconds of screen as four seconds of video | Reading `mvhd` duration |
+| Time stamped from the clock — still wrong | Same four seconds | Reading `mvhd` again, and realising duration comes from the declared rate × frame count, not from the samples |
+
+The first is the one worth keeping. The check in place at the time read the first four
+bytes, found `ftyp`, and said the file was an MP4. It was, and no player would open it.
+**A check that can only pass is not a check** — the same fault as stage 14's font oracle,
+in a new costume.
+
+And a fourth thing that was not a bug at all: the recorder appeared to manage 21 frames a
+second, because 1.8 s of Media Foundation start-up was being charged to the recording. It
+does 30. Both numbers are published now.
+
+### The lesson this stage adds to the campaign
+
+Stage 17 said to measure how often an optimisation's best case happens before building
+it. This one is the same discipline pointed at a feature rather than an optimisation:
+**read the code for what the proposal assumes, before writing the code the proposal
+asks for.** Three of this one's requirements were already met, one of them was
+impossible, and both facts were in comments somebody had already written down.
+
+And the corollary, which cost an hour: when a check comes back negative, suspect the
+instrument before the code. The display was working the first time.
 
 ---
 
