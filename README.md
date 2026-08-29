@@ -604,6 +604,14 @@ vision` runs it every time and reports **0 px off, score 1.000**.
 
 ### Seeing what it sees
 
+**A timeline of every run.** Every step leaves a mark — when it began and which step it was — and the run history shows them under the run, as `mm:ss.mmm` with the time each step took. Slow steps are coloured and the step that ended a failed run is coloured differently. The last twenty thousand marks are kept, so a macro that fails at hour nine keeps the minutes that matter.
+
+**Screen recording.** Optional, off by default: tick it and pressing Record also writes an H.264 video into `recordings/` for as long as the macro recording lasts. It goes through Media Foundation, so the encoder is the graphics card's when there is one — NVIDIA, AMD or Intel alike — and software when there is not, with no third-party dependency either way. Measured on a 2560×1440 desktop: 30 frames a second with none missed. Stopping the recording is what writes the file's index, so a video from a process that was killed will not open.
+
+**Heads-up display.** The same window can carry a display over whatever is in front: what the macro is doing (run, step, the file it came from), what it has had to work around (fallbacks, recovery blocks, OCR retries, steps that missed), the transport state, and the target window's responsiveness. Five presets and four corners, off by default. It keeps working with the main window minimised to the tray, which is the point — the thing being watched is usually a game.
+
+The responsiveness block is headed `RESPONSE` rather than `GAME` on purpose: those figures are how quickly the target window answers its messages, not how fast anything rendered. Real frame timings need an ETW session against the DXGI providers and administrator rights — see [Window responsiveness](#-window-responsiveness).
+
 **Show what the script looks at** puts a see-through, click-through window over everything. While a script runs it draws the search area in blue, the match and its score in green or red, the rectangle text was read from in amber, and the interface element that was found in violet.
 
 A failed search gives you `0.41`, and `0.41` cannot say whether it looked in the wrong place, at the wrong size, or at the right thing under a tooltip. A rectangle can. It is a diagnostic and is off by default.
@@ -1367,63 +1375,41 @@ Issues and PRs are welcome. If you're reporting a playback bug, please attach th
 
 ---
 
-# 🛡️ Security & VirusTotal Verification
+# 🛡️ Security
 
-<p align="center">
-  <a href="https://www.virustotal.com/gui/file/21cab5702a58699c1b2f14ac4dec322ea591cfed52cde2bb9e361e22496413a7/">
-    <img src="https://img.shields.io/badge/VirusTotal-2%2F71%20Safe-brightgreen?style=for-the-badge&logo=virustotal&logoColor=white&color=2e7d32" alt="VirusTotal Build 1">
-  </a>
-  <a href="https://www.virustotal.com/gui/file/f345b6cf338ec6cf070a60e1cc594ae08fb41510f472e29c931553888e9c29a4/">
-    <img src="https://img.shields.io/badge/VirusTotal-3%2F71%20Safe-brightgreen?style=for-the-badge&logo=virustotal&logoColor=white&color=2e7d32" alt="VirusTotal Build 2">
-  </a>
-  <a href="#-why-do-false-positives-occur">
-    <img src="https://img.shields.io/badge/Status-False%20Positives%20Verified-blue?style=for-the-badge&logo=shield&logoColor=white" alt="False Positives Verified">
-  </a>
-</p>
-
----
-
-> [!NOTE]
-> **Safety Notice:** All release binaries automatically undergo VirusTotal verification prior to every release. Out of **71 antivirus vendors**, 69 confirm the files are completely clean. The 2/71 detections are **100% False Positives**, caused by heuristic analysis of low-level Win32 input APIs and the lack of a paid code-signing certificate.
-
----
-
-## 📊 VirusTotal Scan Results
-
-| File / Build | SHA-256 Hash | VT Detection | VirusTotal Report |
-| :--- | :--- | :---: | :---: |
-| **MacroRecorder.exe** | `60b39eff30746a6f7e00fc6ec8f91bbdc377b4e38d319001e7292b156b02a818` | <mark>**2 / 71**</mark> | [🔍 View Report](https://www.virustotal.com/gui/file/60b39eff30746a6f7e00fc6ec8f91bbdc377b4e38d319001e7292b156b02a818?nocache=1) |
-| **MacroRecorder.v3.exe** | `ce43ff5b81bab37f5b95fb6c9433eefbf33d357696bef1cf7933883789a8e48c` | <mark>**3 / 71**</mark> | [🔍 View Report](https://www.virustotal.com/gui/file/ce43ff5b81bab37f5b95fb6c9433eefbf33d357696bef1cf7933883789a8e48c?nocache=1) |
-
----
-
-## ❓ Why Do False Positives Occur?
-
-System-level input automation and simulation utilities frequently trigger heuristic warnings from lesser-known antivirus engines due to the following reasons:
-
-1. **Low-Level Win32 APIs (`SendInput`, `SetWindowsHookEx`)**
-   * Standard Windows API functions are used to intercept hotkeys and execute macros or emulate mouse and keyboard actions. Some heuristic scanners mistakenly flag global input hooks as potential keyloggers or autoclickers.
-2. **Lack of a Commercial Digital Certificate (Code Signing)**
-   * Signing `.exe` files with EV code-signing certificates is expensive. Unsigned binaries from open-source projects receive lower reputation scores from Windows SmartScreen and AI-driven antivirus engines.
-3. **Rust Compiler Optimizations**
-   * Compiling with target optimization flags (LTO, one codegen unit) and carrying four hand-written SIMD kernels — including AVX-512 that most machines will never execute — produces machine code patterns that automated scanners sometimes misinterpret as generic unknown threats (`Heur.BKG`, `Trojan.Generic`). Dispatching on CPUID is a normal thing for a fast program to do and a normal thing for a packer to do, and a scanner cannot always tell.
-
----
-
-## 🔒 Transparency & Verification
-
-This project is fully **Open Source**, giving you full control over what runs on your system:
+This project is fully **open source**, which is the whole of the security story: the
+thing you run is built from the code in this repository, and you can build it yourself.
 
 <details>
-<summary><b>🛠️ SHA-256 Checksum Verification</b></summary>
+<summary><b>🛠️ SHA-256 checksum verification</b></summary>
 
 <br>
 
-To verify that your downloaded `.exe` file matches the audited VirusTotal build, run the following command in PowerShell:
+To check that a downloaded `.exe` is the one that was published, run this in PowerShell
+and compare the result with the hash on the release page:
 
 ```powershell
 Get-FileHash -Algorithm SHA256 .\your_file_name.exe
 ```
+
+</details>
+
+<details>
+<summary><b>🔎 What it needs, and why</b></summary>
+
+<br>
+
+| Capability | What it is for |
+|---|---|
+| Global keyboard and mouse hooks | Recording input, and the hotkeys that work while another window is in front |
+| Synthetic input (`SendInput`) | Playback |
+| Screen capture | Image search, OCR, and the debug overlay |
+| UI Automation | Finding a control by name instead of by coordinate |
+| Clipboard | The text expander, and `Copy`/`Paste` steps |
+| Shutdown privilege | Only when an end-of-run power action is chosen |
+
+Nothing is sent anywhere. There is no network code in the program at all — no
+telemetry, no update check, no crash reporting.
 
 </details>
 
