@@ -450,4 +450,3 @@ paste   instant, but not everywhere, and borrows the clipboard
 ---
 
 Not working? Open an [issue](../../issues) with your `expansions.json`, what you typed, and what came out.
-

@@ -1,8 +1,8 @@
 <div align="center">
 
-<img src="assets/icon_256.png" width="128" alt="Macro Recorder">
+<img src="assets/icon_256.png" width="128" alt="Clickwork">
 
-# 🦀 Macro Recorder
+# 🦀 Clickwork
 
 **Современная опенсорсная альтернатива TinyTask.**
 *Рождён из гринда в Roblox. Выкован на Rust.*
@@ -11,13 +11,13 @@
 [![Windows](https://img.shields.io/badge/Windows-10%20%2F%2011-0078D6?logo=windows&logoColor=white)]()
 [![Rust](https://img.shields.io/badge/Made%20with-Rust%201.98-orange?logo=rust&logoColor=white)]()
 [![egui](https://img.shields.io/badge/UI-egui%20%2F%20eframe%200.36-blue)]()
-[![Latest Release](https://img.shields.io/github/v/release/blackixxce12/Macro-Recorder?label=release&color=green)](https://github.com/blackixxce12/macro-recorder/releases)
+[![Latest Release](https://img.shields.io/github/v/release/blackixxce12/Macro-Recorder?label=release&color=green)](https://github.com/blackixxce12/clickwork/releases)
 
 *Записал мышь и клавиатуру → повторяй вечно, ровно N раз или до таймера → или напиши маленькую программу, которая сама смотрит на экран и решает, что делать.* ☕
 
-[📥 Скачать](../../releases) • [✨ Возможности](#-возможности) • [🧠 Скрипты](SCRIPTS_RU.md) • [🆚 vs TinyTask](#-macro-recorder-vs-tinytask) • [🇬🇧 English version](README.md)
+[📥 Скачать](../../releases) • [✨ Возможности](#-возможности) • [🧠 Скрипты](SCRIPTS_RU.md) • [🆚 vs TinyTask](#-clickwork-vs-tinytask) • [🇬🇧 English version](README.md)
 
-<img src="assets/screenshot.png" width="330" alt="Окно Macro Recorder">
+<img src="assets/screenshot.png" width="330" alt="Окно Clickwork">
 
 </div>
 
@@ -64,7 +64,7 @@
 
 - [История](#-история-roblox-аниме-тавер-дефенсы-и-уставшая-рука)
 - [Почему Rust](#-почему-rust)
-- [Macro Recorder vs TinyTask](#-macro-recorder-vs-tinytask)
+- [Clickwork vs TinyTask](#-clickwork-vs-tinytask)
 - [Возможности](#-возможности)
 - [Как это работает](#-как-это-работает)
 - [Горячие клавиши](#️-горячие-клавиши)
@@ -129,13 +129,13 @@
 
 ---
 
-## 🆚 Macro Recorder vs TinyTask
+## 🆚 Clickwork vs TinyTask
 
 > **Таблица сверена** с официальным сайтом TinyTask, его changelog, FAQ и страницей поддержки (см. [Источники](#источники-по-колонке-tinytask)). TinyTask — *не* плохая программа, а намеренно минималистичная. Где он выигрывает, там так и написано.
 
 ### Что выбрать
 
-| Берите **TinyTask**, если… | Берите **Macro Recorder**, если… |
+| Берите **TinyTask**, если… | Берите **Clickwork**, если… |
 |---|---|
 | Нужен минимальный размер (36 КБ) | Нужны таймер, пауза/продолжение и действия с питанием |
 | Нужна работа на Windows XP / Vista / 7 | У вас Windows 10 / 11 с масштабированием или несколькими мониторами |
@@ -145,7 +145,7 @@
 
 ### Полное сравнение
 
-| | **TinyTask 1.77** | **Macro Recorder** |
+| | **TinyTask 1.77** | **Clickwork** |
 |---|---|---|
 | **Лицензия** | Freeware, **закрытый исходник** | **MIT, полностью открытый** |
 | **Реализация** | Чистый C + голый Win32, самодостаточный **32-битный** exe | Rust 2024 + `windows-rs`, **64-битный** exe |
@@ -208,7 +208,7 @@
    наши — копия этого исполняемого файла на ~10 МБ, потому что плеер *и есть* всё приложение.
    Если надо отправить макрос человеку на старой машине — TinyTask выигрывает вчистую.
 2. **Десятилетие полевых испытаний.** TinyTask годами используют огромное число людей.
-   Macro Recorder молод — пожалуйста, [пишите issues](../../issues).
+   Clickwork молод — пожалуйста, [пишите issues](../../issues).
 
 ### Источники по колонке TinyTask
 
@@ -321,7 +321,7 @@ flowchart LR
         OCRW["Windows.Media.Ocr"]
     end
 
-    subgraph APP["macro-recorder.exe"]
+    subgraph APP["Clickwork.exe"]
         T1["Поток хуков<br/>цикл сообщений Win32"]
         T2["Поток-сборщик"]
         T3["Поток воспроизведения / скрипта"]
@@ -943,7 +943,7 @@ stateDiagram-v2
 Папку данных приложение выбирает при старте и показывает результат в разделе **📁 Файлы**:
 
 1. **Рядом с исполняемым файлом** — если туда можно писать (полностью портативно: флешки, `Загрузки`, папка игры);
-2. иначе **`%APPDATA%\MacroRecorder\`** — чтобы всё работало и из `Program Files`, и из места только для чтения.
+2. иначе **`%APPDATA%\Clickwork\`** — чтобы всё работало и из `Program Files`, и из места только для чтения.
 
 ```
 <папка данных>/
@@ -957,7 +957,7 @@ stateDiagram-v2
 ├── lang/
 │   └── ru.json                  подмена перевода (опционально)
 └── logs/
-    └── macro-recorder.log.ГГГГ-ММ-ДД
+    └── clickwork.log.ГГГГ-ММ-ДД
 ```
 
 ### `macro.json` — запись (формат v5)
@@ -977,7 +977,7 @@ stateDiagram-v2
     "window": "Roblox",
     "window_rect": [100, 80, 1280, 720],
     "layout": "en-US",
-    "app": "Macro Recorder 1.8.0"
+    "app": "Clickwork 1.8.0"
   },
   "events": [
     { "t_us": 0,      "kind": { "MouseMove":   { "x": 960, "y": 540, "dx": 0, "dy": 0 } } },
@@ -1107,7 +1107,7 @@ stateDiagram-v2
 ## 💻 Командная строка
 
 ```
-macro-recorder [OPTIONS]
+clickwork [OPTIONS]
 
   -p, --play <FILE>    Загрузить макрос (.json / .mrz) при старте
   -n, --loops <N>      Число повторов (0 = бесконечно)
@@ -1128,7 +1128,7 @@ macro-recorder [OPTIONS]
 **2** — файл не удалось прочитать вообще. Предупреждения печатаются и на код возврата не влияют.
 
 ```powershell
-macro-recorder.exe --play "D:\macros\farm.mrz" --check
+Clickwork.exe --play "D:\macros\farm.mrz" --check
 ```
 
 ```
@@ -1151,8 +1151,8 @@ D:\macros\farm.mrz
 работа либо произойдёт, либо не произойдёт, вместо того чтобы произойти наполовину:
 
 ```powershell
-macro-recorder.exe --play farm.mrz --check
-if ($LASTEXITCODE -eq 0) { macro-recorder.exe --play farm.mrz --loops 20 --no-gui }
+Clickwork.exe --play farm.mrz --check
+if ($LASTEXITCODE -eq 0) { Clickwork.exe --play farm.mrz --loops 20 --no-gui }
 ```
 
 `--no-gui` и сам прогоняет ту же проверку и отказывается стартовать, если нашёл ошибку,
@@ -1170,10 +1170,10 @@ if ($LASTEXITCODE -eq 0) { macro-recorder.exe --play farm.mrz --loops 20 --no-gu
 
 ```powershell
 # Предзагрузить макрос и открыть окно
-macro-recorder.exe --play "D:\macros\farm.mrz"
+Clickwork.exe --play "D:\macros\farm.mrz"
 
 # Прогнать 20 раз без окна (планировщик задач, .bat-файлы, …)
-macro-recorder.exe --play "D:\macros\farm.mrz" --loops 20 --speed 1.5 --no-gui
+Clickwork.exe --play "D:\macros\farm.mrz" --loops 20 --speed 1.5 --no-gui
 ```
 
 Скрипты в безоконном режиме тоже работают. Аварийная горячая клавиша по-прежнему действует.
@@ -1184,15 +1184,15 @@ macro-recorder.exe --play "D:\macros\farm.mrz" --loops 20 --speed 1.5 --no-gui
 макрос на ночь. Каждая печатает таблицу и человеческое пояснение, как её читать.
 
 ```powershell
-macro-recorder.exe --selftest dryrun          # доказывает, что проверочный прогон ничего не трогает
-macro-recorder.exe --selftest target          # каскад целей на настоящем потоке воспроизведения
-macro-recorder.exe --selftest recovery        # блоки восстановления: вход, возврат, ограничение
-macro-recorder.exe --selftest vision          # захват, поиск и OCR — с цифрами
-macro-recorder.exe --selftest simd            # все наборы инструкций в .exe: гонка и сверка
-macro-recorder.exe --selftest script          # интерпретатор: политики промаха, вызовы, пошаговый режим
-macro-recorder.exe --selftest timing          # планировщик воспроизведения под нагрузкой
-macro-recorder.exe --selftest churn=120       # жизненный цикл воспроизведения, вкруговую
-macro-recorder.exe --selftest soak=2          # часы захватов, со слежением за хендлами и памятью
+Clickwork.exe --selftest dryrun          # доказывает, что проверочный прогон ничего не трогает
+Clickwork.exe --selftest target          # каскад целей на настоящем потоке воспроизведения
+Clickwork.exe --selftest recovery        # блоки восстановления: вход, возврат, ограничение
+Clickwork.exe --selftest vision          # захват, поиск и OCR — с цифрами
+Clickwork.exe --selftest simd            # все наборы инструкций в .exe: гонка и сверка
+Clickwork.exe --selftest script          # интерпретатор: политики промаха, вызовы, пошаговый режим
+Clickwork.exe --selftest timing          # планировщик воспроизведения под нагрузкой
+Clickwork.exe --selftest churn=120       # жизненный цикл воспроизведения, вкруговую
+Clickwork.exe --selftest soak=2          # часы захватов, со слежением за хендлами и памятью
 ```
 
 `--selftest simd` отвечает на вопрос «этот один .exe действительно использует мой
@@ -1216,7 +1216,7 @@ script` занимает несколько секунд и прогоняет �
 
 | Файл | Требует | Примечания |
 |---|---|---|
-| `MacroRecorder.exe` | Любой x86-64 | Одна сборка, ~10 МБ. Набор инструкций выбирается при старте |
+| `Clickwork.exe` | Любой x86-64 | Одна сборка, ~10 МБ. Набор инструкций выбирается при старте |
 
 Отдельного `.v3.exe` больше нет. Поиск картинки — единственный горячий цикл, где
 набор инструкций вообще что-то значит, — скомпилирован **четыре раза в один и тот же
@@ -1265,12 +1265,12 @@ cargo test
 
 **Иконка:** `build.rs` вшивает `assets/icon.ico` в исполняемый файл через [`winresource`](https://github.com/BenjaminRi/winresource), которому нужен компилятор ресурсов — `rc.exe` (Windows SDK, идёт с MSVC) или `windres.exe` (MinGW). Если его нет, сборка всё равно проходит: вы получите `cargo:warning` и exe без иконки в Проводнике. Иконка окна берётся из `assets/icon.rgba` и работает всегда.
 
-Чтобы посмотреть, что делает приложение, читайте `logs/macro-recorder.log.*` или соберите debug-сборку (в ней остаётся консоль) и задайте `RUST_LOG=debug`.
+Чтобы посмотреть, что делает приложение, читайте `logs/clickwork.log.*` или соберите debug-сборку (в ней остаётся консоль) и задайте `RUST_LOG=debug`.
 
 **Инспекция живого интерфейса.** eframe умеет отдавать [протокол инспекции egui](https://crates.io/crates/egui_inspection) — он позволяет внешнему инструменту читать дерево виджетов, вбрасывать клики и нажатия клавиш и снимать экран работающего приложения. В релизной сборке его **нет**: он тянет за собой msgpack и обвязку AccessKit примерно на 830 КБ ради порта, который готовый бинарник всё равно никогда не открывает. Чтобы им воспользоваться, добавьте `"inspection"` в список фич eframe в `Cargo.toml`, пересоберите и запустите приложение с переменной окружения:
 
 ```sh
-EGUI_INSPECTION=1 ./macro-recorder.exe        # слушает 127.0.0.1:5719
+EGUI_INSPECTION=1 ./Clickwork.exe        # слушает 127.0.0.1:5719
 ```
 
 После этого наведите на него [`egui_mcp`](https://crates.io/crates/egui_mcp) — или что угодно другое, говорящее на этом протоколе. Ответ на запрос дерева несёт счётчик кадров: именно так в 1.9.3 была найдена перерисовка в простое и измерена починка. Перед сборкой релиза уберите фичу обратно. Никогда не привязывайте адрес, отличный от loopback: у протокола нет аутентификации и он даёт полный контроль над приложением.
@@ -1322,7 +1322,7 @@ EGUI_INSPECTION=1 ./macro-recorder.exe        # слушает 127.0.0.1:5719
 Потому что здесь GPU-ускоренный UI-тулкит, 9 тем, 6 переводов, сопоставление шаблонов и слой питания/DPI/виртуальных столов. Другой компромисс, и это осознанно. Если приоритет — размер, TinyTask действительно лучше.
 
 **Куда делся мой `config.json`?**
-Рядом с exe, если туда можно писать, иначе `%APPDATA%\MacroRecorder\`. Точный путь показан в разделе **📁 Файлы**.
+Рядом с exe, если туда можно писать, иначе `%APPDATA%\Clickwork\`. Точный путь показан в разделе **📁 Файлы**.
 
 **Переживёт ли макрос смену разрешения?**
 Координаты абсолютные, так что нет — после смены разрешения или раскладки мониторов запишите заново. Смена *масштаба DPI* обрабатывается, потому что процесс объявлен Per-Monitor v2. Скрипт на поиске картинок переживает куда больше, чем макрос на фиксированных координатах.
@@ -1346,7 +1346,7 @@ EGUI_INSPECTION=1 ./macro-recorder.exe        # слушает 127.0.0.1:5719
 
 ## 🤝 Участие в проекте
 
-Issues и PR приветствуются. Если сообщаете о баге воспроизведения, приложите файл макроса (или его обрезанную версию), нужный кусок `logs/macro-recorder.log.*`, а также версию Windows, масштабирование и раскладку мониторов. Для бага в скрипте: шаг `Заметка` пишет прямо в лог — расставьте несколько и приложите результат.
+Issues и PR приветствуются. Если сообщаете о баге воспроизведения, приложите файл макроса (или его обрезанную версию), нужный кусок `logs/clickwork.log.*`, а также версию Windows, масштабирование и раскладку мониторов. Для бага в скрипте: шаг `Заметка` пишет прямо в лог — расставьте несколько и приложите результат.
 
 ---
 
@@ -1401,5 +1401,4 @@ MIT — см. [LICENSE](LICENSE).
 [tracing](https://github.com/tokio-rs/tracing).
 
 Вдохновлено **TinyTask** — спасибо за десять лет тихо сбережённых рук.
-
 

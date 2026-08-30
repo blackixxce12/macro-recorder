@@ -450,4 +450,3 @@ KeePass, Bitwarden, 1Password, PowerShell, cmd.exe
 ---
 
 Не работает — заведите [issue](../../issues) и приложите свой `expansions.json` вместе с описанием того, что набрали и что получилось.
-

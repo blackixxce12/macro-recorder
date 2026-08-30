@@ -1,0 +1,8 @@
+# Build output.
+/target
+
+# Staged for, and produced by, the MSI build. The installer source next to them is
+# version-controlled; these are not.
+/packaging/*.exe
+/packaging/*.msi
+/packaging/*.wixpdb

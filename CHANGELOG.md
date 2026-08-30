@@ -1,9 +1,39 @@
 # Changelog
 
-All notable changes to Macro Recorder are recorded here.
+All notable changes to Clickwork are recorded here.
 Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versions follow [Semantic Versioning](https://semver.org/).
 
 [🇷🇺 Русская версия](CHANGELOG_RU.md)
+
+---
+
+## [2.0.0]
+
+The program is called Clickwork now. That is the whole of this release.
+
+There is no new behaviour here and no changed behaviour, on purpose: a rename is easier
+to trust when nothing else moves at the same time. The one thing that did need writing
+is the thing a rename can quietly break.
+
+### Changed
+
+- **Everything the program calls itself.** The window title, the executable, the crate,
+  the Windows file metadata, the tray and overlay window classes, the single-instance
+  mutex, the log file, and the product name in all six languages of the handbook.
+
+- **The settings folder moved** from `%APPDATA%\MacroRecorder\` to
+  `%APPDATA%\Clickwork\`, and 2.0.0 brings the old one along. On the first run, if the
+  new folder is not there and the old one is, the old folder is moved across. If the
+  move fails - a file held open, a permission - the old folder is used where it stands,
+  because the one outcome worth ruling out is somebody starting from nothing. Macros,
+  templates, profiles, run history and settings survive the rename either way.
+
+  A portable installation, with its files next to the executable, never touches
+  `%APPDATA%` and is unaffected.
+
+- **The single-instance mutex was renamed with everything else**, which means a 1.9.6
+  build and a 2.0.0 build do not see each other. Close the old one before running the
+  new one.
 
 ---
 
@@ -1891,5 +1921,4 @@ condition · built-in editor with three views · script engine with 17 step kind
 6 conditions and variables · image search · OCR through `Windows.Media.Ocr` · scheduler ·
 target window · 7 rebindable hotkeys · 9 themes · 6 languages · `.exe` and AutoHotkey
 export · settings profiles · headless CLI.
-
 

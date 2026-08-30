@@ -1,8 +1,8 @@
 <div align="center">
 
-<img src="assets/icon_256.png" width="128" alt="Macro Recorder">
+<img src="assets/icon_256.png" width="128" alt="Clickwork">
 
-# 🦀 Macro Recorder
+# 🦀 Clickwork
 
 **A modern, open-source alternative to TinyTask.**
 *Born from Roblox grind. Forged in Rust.*
@@ -11,13 +11,13 @@
 [![Windows](https://img.shields.io/badge/Windows-10%20%2F%2011-0078D6?logo=windows&logoColor=white)]()
 [![Rust](https://img.shields.io/badge/Made%20with-Rust%201.98-orange?logo=rust&logoColor=white)]()
 [![egui](https://img.shields.io/badge/UI-egui%20%2F%20eframe%200.36-blue)]()
-[![Latest Release](https://img.shields.io/github/v/release/blackixxce12/Macro-Recorder?label=release&color=green)](https://github.com/blackixxce12/macro-recorder/releases)
+[![Latest Release](https://img.shields.io/github/v/release/blackixxce12/Macro-Recorder?label=release&color=green)](https://github.com/blackixxce12/clickwork/releases)
 
 *Record mouse & keyboard → replay it forever, exactly N times, or until a timer runs out → or write a little program that watches the screen and decides for itself.* ☕
 
-[📥 Download](../../releases) • [✨ Features](#-features) • [🧠 Scripts](SCRIPTS.md) • [🆚 vs TinyTask](#-macro-recorder-vs-tinytask) • [🇷🇺 Русская версия](README_RU.md)
+[📥 Download](../../releases) • [✨ Features](#-features) • [🧠 Scripts](SCRIPTS.md) • [🆚 vs TinyTask](#-clickwork-vs-tinytask) • [🇷🇺 Русская версия](README_RU.md)
 
-<img src="assets/screenshot.png" width="330" alt="Macro Recorder window">
+<img src="assets/screenshot.png" width="330" alt="Clickwork window">
 
 </div>
 
@@ -63,7 +63,7 @@ rotating log file · virtual-desktop isolation · per-monitor DPI awareness.
 
 - [The story](#-the-story-roblox-anime-tower-defenses-and-a-tired-hand)
 - [Why Rust](#-why-rust)
-- [Macro Recorder vs TinyTask](#-macro-recorder-vs-tinytask)
+- [Clickwork vs TinyTask](#-clickwork-vs-tinytask)
 - [Features](#-features)
 - [How it works](#-how-it-works)
 - [Hotkeys](#️-hotkeys)
@@ -128,13 +128,13 @@ That weekend project got slightly out of hand. 🦀
 
 ---
 
-## 🆚 Macro Recorder vs TinyTask
+## 🆚 Clickwork vs TinyTask
 
 > **This table is fact-checked** against TinyTask's official website, changelog, FAQ and support pages (see [Sources](#sources-for-the-tinytask-column)). TinyTask is *not* a bad program — it's a deliberately minimal one. Where it wins, this table says so.
 
 ### Pick the right tool
 
-| Pick **TinyTask** if… | Pick **Macro Recorder** if… |
+| Pick **TinyTask** if… | Pick **Clickwork** if… |
 |---|---|
 | You need the smallest possible footprint (36 KB) | You want timed playback, pause/resume and power actions |
 | You need to run on Windows XP / Vista / 7 | You're on Windows 10 / 11 with DPI scaling or multiple monitors |
@@ -144,7 +144,7 @@ That weekend project got slightly out of hand. 🦀
 
 ### Full comparison
 
-| | **TinyTask 1.77** | **Macro Recorder** |
+| | **TinyTask 1.77** | **Clickwork** |
 |---|---|---|
 | **License** | Freeware, **closed source** (proprietary) | **MIT, fully open source** |
 | **Implementation** | Pure C + raw Win32, self-contained **32-bit** exe | Rust 2024 + `windows-rs`, **64-bit** exe |
@@ -207,7 +207,7 @@ Credit where it's due — two things TinyTask does that this project cannot:
    ours are a ~10 MB copy of this executable, because the player *is* the whole app.
    If you need to email a macro to someone on an old machine, TinyTask wins outright.
 2. **A decade of field testing.** TinyTask has been used by an enormous number of people for
-   many years. Macro Recorder is young — please [file issues](../../issues).
+   many years. Clickwork is young — please [file issues](../../issues).
 
 ### Sources for the TinyTask column
 
@@ -328,7 +328,7 @@ flowchart LR
         OCRW["Windows.Media.Ocr"]
     end
 
-    subgraph APP["macro-recorder.exe"]
+    subgraph APP["Clickwork.exe"]
         T1["Hook thread<br/>Win32 message loop"]
         T2["Collector thread"]
         T3["Playback / script thread"]
@@ -967,7 +967,7 @@ The UI language is detected from `GetUserDefaultUILanguage()` on first launch an
 The app picks its data folder at startup and shows the result under **📁 Files**:
 
 1. **Next to the executable** — if that folder is writable (fully portable: USB sticks, `Downloads`, a game folder);
-2. otherwise **`%APPDATA%\MacroRecorder\`** — so it still works from `Program Files` or a read-only location.
+2. otherwise **`%APPDATA%\Clickwork\`** — so it still works from `Program Files` or a read-only location.
 
 ```
 <data folder>/
@@ -981,7 +981,7 @@ The app picks its data folder at startup and shows the result under **📁 Files
 ├── lang/
 │   └── ru.json                  optional translation overrides
 └── logs/
-    └── macro-recorder.log.YYYY-MM-DD
+    └── clickwork.log.YYYY-MM-DD
 ```
 
 ### `macro.json` — the recording (format v5)
@@ -1001,7 +1001,7 @@ The app picks its data folder at startup and shows the result under **📁 Files
     "window": "Roblox",
     "window_rect": [100, 80, 1280, 720],
     "layout": "en-US",
-    "app": "Macro Recorder 1.8.0"
+    "app": "Clickwork 1.8.0"
   },
   "events": [
     { "t_us": 0,      "kind": { "MouseMove":   { "x": 960, "y": 540, "dx": 0, "dy": 0 } } },
@@ -1131,7 +1131,7 @@ Written by **💾 Save settings** and automatically on exit. Unknown or out-of-r
 ## 💻 Command line
 
 ```
-macro-recorder [OPTIONS]
+clickwork [OPTIONS]
 
   -p, --play <FILE>    Load a macro (.json / .mrz) on start
   -n, --loops <N>      Repeat count (0 = infinite)
@@ -1153,7 +1153,7 @@ Checks the macro and exits without sending a single click. **0** if it is fit to
 not change the code.
 
 ```powershell
-macro-recorder.exe --play "D:\macros\farm.mrz" --check
+Clickwork.exe --play "D:\macros\farm.mrz" --check
 ```
 
 ```
@@ -1176,8 +1176,8 @@ any input is sent. Put it in front of the real run and the night's work either
 happens or does not, instead of happening halfway:
 
 ```powershell
-macro-recorder.exe --play farm.mrz --check
-if ($LASTEXITCODE -eq 0) { macro-recorder.exe --play farm.mrz --loops 20 --no-gui }
+Clickwork.exe --play farm.mrz --check
+if ($LASTEXITCODE -eq 0) { Clickwork.exe --play farm.mrz --loops 20 --no-gui }
 ```
 
 `--no-gui` runs the same check by itself and refuses to start when it finds an error,
@@ -1194,10 +1194,10 @@ Without `--no-gui` the options simply pre-load the GUI, which is handy for short
 
 ```powershell
 # Preload a macro and start the UI with it
-macro-recorder.exe --play "D:\macros\farm.mrz"
+Clickwork.exe --play "D:\macros\farm.mrz"
 
 # Run it 20 times without a window (Task Scheduler, .bat files, …)
-macro-recorder.exe --play "D:\macros\farm.mrz" --loops 20 --speed 1.5 --no-gui
+Clickwork.exe --play "D:\macros\farm.mrz" --loops 20 --speed 1.5 --no-gui
 ```
 
 Scripts run in headless mode too. The emergency-stop hotkey still works.
@@ -1208,15 +1208,15 @@ Not documented as a feature so much as a way to check a machine before trusting 
 macro to it overnight. Each writes a table and a plain-English note on how to read it.
 
 ```powershell
-macro-recorder.exe --selftest dryrun          # proves a test run touches nothing
-macro-recorder.exe --selftest target          # the target cascade, on a real playback thread
-macro-recorder.exe --selftest recovery        # recovery blocks: entered, returned from, capped
-macro-recorder.exe --selftest vision          # capture, search and OCR, with numbers
-macro-recorder.exe --selftest simd            # every instruction set in the .exe, raced and checked
-macro-recorder.exe --selftest script          # the interpreter: miss policies, calls, step mode
-macro-recorder.exe --selftest timing          # the replay scheduler under load
-macro-recorder.exe --selftest churn=120       # the playback lifecycle, hammered
-macro-recorder.exe --selftest soak=2          # hours of captures, watching handles and memory
+Clickwork.exe --selftest dryrun          # proves a test run touches nothing
+Clickwork.exe --selftest target          # the target cascade, on a real playback thread
+Clickwork.exe --selftest recovery        # recovery blocks: entered, returned from, capped
+Clickwork.exe --selftest vision          # capture, search and OCR, with numbers
+Clickwork.exe --selftest simd            # every instruction set in the .exe, raced and checked
+Clickwork.exe --selftest script          # the interpreter: miss policies, calls, step mode
+Clickwork.exe --selftest timing          # the replay scheduler under load
+Clickwork.exe --selftest churn=120       # the playback lifecycle, hammered
+Clickwork.exe --selftest soak=2          # hours of captures, watching handles and memory
 ```
 
 `--selftest simd` answers "does this one .exe really use my processor?" — it lists
@@ -1240,7 +1240,7 @@ Grab the latest `.exe` from the **[Releases](../../releases)** page. No installa
 
 | File | Requires | Notes |
 |---|---|---|
-| `MacroRecorder.exe` | Any x86-64 CPU | One build, ~10 MB. Picks its own instruction set at start-up |
+| `Clickwork.exe` | Any x86-64 CPU | One build, ~10 MB. Picks its own instruction set at start-up |
 
 There is no longer a separate `.v3.exe`. The image search — the one hot loop where
 the instruction set is worth anything — is compiled **four times into the same
@@ -1289,12 +1289,12 @@ The binary lands in `target/release/`. Release profile: `opt-level = 3`, fat LTO
 
 **Icon:** `build.rs` embeds `assets/icon.ico` into the executable using [`winresource`](https://github.com/BenjaminRi/winresource), which needs a resource compiler — `rc.exe` (Windows SDK, comes with the MSVC toolchain) or `windres.exe` (MinGW). If it isn't found the build still succeeds; you just get a `cargo:warning` and no Explorer icon. The window icon comes from `assets/icon.rgba` and always works.
 
-To watch what the app is doing, either read `logs/macro-recorder.log.*` or build in debug mode (which keeps a console attached) and set `RUST_LOG=debug`.
+To watch what the app is doing, either read `logs/clickwork.log.*` or build in debug mode (which keeps a console attached) and set `RUST_LOG=debug`.
 
 **Inspecting the live UI.** eframe can serve [egui's inspection protocol](https://crates.io/crates/egui_inspection), which lets an external tool read the widget tree, inject clicks and keystrokes, and capture screenshots of the running app. It is **not** in the release build: it pulls in msgpack and AccessKit machinery worth about 830 KB to serve a port a shipped binary never opens. To use it, add `"inspection"` to eframe's feature list in `Cargo.toml`, rebuild, and start the app with the environment variable set:
 
 ```sh
-EGUI_INSPECTION=1 ./macro-recorder.exe        # binds 127.0.0.1:5719
+EGUI_INSPECTION=1 ./Clickwork.exe        # binds 127.0.0.1:5719
 ```
 
 Then point [`egui_mcp`](https://crates.io/crates/egui_mcp) — or anything else speaking the protocol — at it. The reply to a tree request carries a frame counter, which is how 1.9.3's idle repaint was found and how the fix was measured. Take the feature back out before building a release. Never bind a non-loopback address: the protocol has no authentication and gives full control of the app.
@@ -1347,7 +1347,7 @@ Lower the confidence a little (0.85 → 0.75), re-snip the template *without* th
 Because it ships a GPU-accelerated UI toolkit, 9 themes, 6 translations, a template matcher, a power/DPI/virtual-desktop layer, and the image-search kernel compiled four times over for four instruction sets. Different trade-off, on purpose. If size is your priority, TinyTask is genuinely the better answer.
 
 **Where did my `config.json` go?**
-Next to the exe if that folder is writable, otherwise `%APPDATA%\MacroRecorder\`. The app prints the exact path under **📁 Files**.
+Next to the exe if that folder is writable, otherwise `%APPDATA%\Clickwork\`. The app prints the exact path under **📁 Files**.
 
 **Will my macro survive changing the resolution?**
 Coordinates are absolute, so no — re-record after a resolution or monitor-layout change. Changing *DPI scaling* is handled, because the process is Per-Monitor v2 aware. A script built on image search survives far more than one built on fixed coordinates.
@@ -1371,7 +1371,7 @@ Whatever language packs Windows has installed. Add one in *Settings → Time & l
 
 ## 🤝 Contributing
 
-Issues and PRs are welcome. If you're reporting a playback bug, please attach the macro file (or a trimmed version of it), the relevant part of `logs/macro-recorder.log.*`, and your Windows version, display scaling and monitor layout. For a script bug, the `Note` step writes straight into the log — sprinkle a few in and attach the result.
+Issues and PRs are welcome. If you're reporting a playback bug, please attach the macro file (or a trimmed version of it), the relevant part of `logs/clickwork.log.*`, and your Windows version, display scaling and monitor layout. For a script bug, the `Note` step writes straight into the log — sprinkle a few in and attach the result.
 
 ---
 
@@ -1426,5 +1426,4 @@ Built with [egui / eframe](https://github.com/emilk/egui), [windows-rs](https://
 [tracing](https://github.com/tokio-rs/tracing).
 
 Inspired by **TinyTask** — thanks for a decade of quietly saving people's hands.
-
 

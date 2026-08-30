@@ -1,4 +1,4 @@
-# 🧠 Scripts in Macro Recorder
+# 🧠 Scripts in Clickwork
 
 ### A guide for someone who has never done this before
 
@@ -241,7 +241,7 @@ If you want "shut the PC down when the script finishes", use a `Run` step with t
 | **End while** | End of the loop |
 | **Break** | Leave the loop early |
 | **Run** | Open a program, file, folder or URL |
-| **Quit the app** | Close Macro Recorder itself |
+| **Quit the app** | Close Clickwork itself |
 | **Note** | Write text to the log file (for debugging) |
 | **Read number** | Recognise a number on screen into a variable |
 | **Find image** | Look for a picture and report where it is, without clicking |
@@ -669,7 +669,7 @@ Arguments are split on spaces. An argument containing a space (a path like `C:\M
 
 ### 🛑 Quit the app
 
-No fields. Closes Macro Recorder completely.
+No fields. Closes Clickwork completely.
 
 For the "do the job then exit" pattern:
 
@@ -1140,7 +1140,7 @@ A template is a small PNG of the button or icon you want found.
 
 1. Open the game the way it will look while the macro runs.
 2. Press `Win+Shift+S` (the Windows snipping tool) and select **just the button**.
-3. In Macro Recorder expand **🔎 Image search** and press **📋 Paste**.
+3. In Clickwork expand **🔎 Image search** and press **📋 Paste**.
 4. Press **🔍 Find on screen**. You should get `Found at (x, y) — 0.98`.
 5. Press **💾 Save PNG…** and save it into the `templates/` folder under a clear name, e.g. `claim_button.png`.
 6. In the script step, type the name into the `Template` field: `claim_button`.
@@ -1274,7 +1274,7 @@ Walking through it:
 - **7–8** — wait for the button and press it.
 - **10** — read the gem counter off the screen into the variable. Get the region from the **🔤 Text on screen** panel with **⤵ from the panel**.
 - **14** — the Windows shutdown command with a 60-second delay. Cancel it by running `shutdown /a` in a terminal.
-- **15** — close Macro Recorder itself.
+- **15** — close Clickwork itself.
 
 > ⚠️ Note that the shutdown is a `Run` step, **not** the "Action when the limit is hit" setting in the main window. That setting does nothing in script mode.
 
@@ -1301,7 +1301,7 @@ Scatter `Note` steps at the interesting points:
 Then open the log file:
 
 ```
-<data folder>/logs/macro-recorder.log.2026-08-16
+<data folder>/logs/clickwork.log.2026-08-16
 ```
 
 The exact data-folder path is shown in the main window under **📁 Files**. Any text editor opens it.
@@ -1378,7 +1378,7 @@ If it doesn't work in the panel, it certainly won't work in the script.
 | The pixel stop condition never fires | The **🎯 Pixel condition** setting is ignored in script mode | Use a `pixel` condition inside `Wait for` / `If` / `While` |
 | The PC doesn't shut down after the time limit | "Action when the limit is hit" is ignored in script mode | Use a `Run` step → `shutdown` with `/s /t 60` |
 | The script sits still, status says "Waiting for the window…" | **Target window → Pause while it is not in front** is on | Switch to that window, or untick the box |
-| Everything froze, status says "Held" | The app is on another virtual desktop | Go back to the desktop where Macro Recorder lives |
+| Everything froze, status says "Held" | The app is on another virtual desktop | Go back to the desktop where Clickwork lives |
 | The exported `.exe` can't find images | Templates weren't shipped with it | Copy the `templates/` folder next to the exported `.exe` |
 | The `.ahk` export lost all the logic | Working as intended | Only recorded events are translated to AutoHotkey |
 
@@ -1405,7 +1405,7 @@ An honest list, so you don't hunt for buttons that aren't there:
 - **No way to use `match_x` / `match_y` in a `Click at` step.** Those fields are plain numbers; a variable can't go in them. Clicking a found image is what the separate `Click image` step is for.
 - **Variables don't survive a restart.** Every run starts fresh.
 
-If you hit this list, what you probably want is AutoHotkey. That's fine: Macro Recorder is designed as a recorder with conditions, not as a programming language.
+If you hit this list, what you probably want is AutoHotkey. That's fine: Clickwork is designed as a recorder with conditions, not as a programming language.
 
 ---
 
@@ -1506,10 +1506,9 @@ text "word" <region>
 
 **Threshold:** start at `0.85`; not found → `0.75`; matching the wrong thing → `0.90`.
 
-**Log:** `<data folder>/logs/macro-recorder.log.YYYY-MM-DD` — the folder path is shown under **📁 Files**.
+**Log:** `<data folder>/logs/clickwork.log.YYYY-MM-DD` — the folder path is shown under **📁 Files**.
 
 ---
 
 Still stuck? Open an [issue](../../issues) with the macro file and the relevant part of the log. The `Note` step writes straight there — scatter a few in first.
-
 

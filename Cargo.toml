@@ -1,6 +1,6 @@
 [package]
-name = "macro-recorder"
-version = "1.9.6"
+name = "clickwork"
+version = "2.0.0"
 edition = "2024"
 rust-version = "1.98.0"
 description = "A modern, DPI-aware macro recorder that records straight into image-matched steps, with Desktop Duplication capture, native Windows 11 Mica/Acrylic, Virtual Desktop isolation, and secure shutdown"
@@ -21,7 +21,7 @@ winocr = []
 # shipped binary and keeps either build from invalidating the other's cache:
 #
 #   cargo build --release --features inspect --target-dir target/inspect
-#   cp target/inspect/release/macro-recorder.exe target/inspect/release/MacroInspect.exe
+#   cp target/inspect/release/clickwork.exe target/inspect/release/MacroInspect.exe
 #
 # then run MacroInspect.exe with EGUI_INSPECTION=1. The rename is a copy rather than a
 # second [[bin]] target on purpose: two targets sharing one src/main.rs make cargo warn
@@ -133,6 +133,5 @@ strip = true
 # abort, so it was removed from the hook callbacks entirely; those paths are now written
 # to be panic-free (null-pointer guards, no unwrap, no slice indexing).
 panic = "abort"
-
 
 

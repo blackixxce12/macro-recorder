@@ -14,7 +14,7 @@ That is what this stage is for.
 
 Work top to bottom; the sections are ordered so setup happens once. Tick a row when it
 behaves; when it does not, record **the row ID, what you saw, and the matching lines
-from `logs/macro-recorder.log.*`**. A row ID is enough for me to find the code.
+from `logs/clickwork.log.*`**. A row ID is enough for me to find the code.
 
 Rows marked 🔥 are new in 1.1.0–1.3.0 or were deliberately excluded from the automated
 stages. Rows marked 🆕 are new in **1.4.0** and have never been touched by a human at
@@ -38,7 +38,7 @@ cannot be tested any other way.
 |---|---|---|
 | A-1 | 🔥 Copy the exe to an empty writable folder and run it | `templates/`, `profiles/`, `lang/`, `logs/` all exist immediately, before anything is saved |
 | A-2 | Check the path shown under **📁 Files** | Points at the folder next to the exe |
-| A-3 | Copy the exe into `C:\Program Files\...` and run | Data folder falls back to `%APPDATA%\MacroRecorder\`, and the panel says so |
+| A-3 | Copy the exe into `C:\Program Files\...` and run | Data folder falls back to `%APPDATA%\Clickwork\`, and the panel says so |
 | A-4 | Close the app, reopen it | Settings survived; no `config.json` parse errors in the log |
 | A-5 | Delete `config.json`, reopen | Starts with defaults, does not crash |
 | A-6 | 🔥 Confirm **Frame-rate guard** is unticked on a fresh config | Off by default |
@@ -705,7 +705,7 @@ Rows marked 🧪 are 1.8.0.
 | T-45 | Switch the keyboard layout and reopen | The Keyboard row is coloured |
 | T-46 | Turn the box **off**, record, and look at the file | No `recorded` block at all. The panel says nothing was written down |
 | T-47 | Open a macro recorded before 1.8.0 | Panel says nothing was written down. No errors, no invented values |
-| T-48 | Check that the note is taken **before** the first event | `process` is the application you were about to work in, **not** Macro Recorder itself |
+| T-48 | Check that the note is taken **before** the first event | `process` is the application you were about to work in, **not** Clickwork itself |
 | T-49 | Record on the secondary monitor of two | `monitor` says 2 of 2, not 1 |
 
 ### T6. Why a step did that 🧪
@@ -867,5 +867,4 @@ Never done, and not superseded by anything above:
 
 Section D still matters most of these: the frame guard is the largest thing added since
 1.0.0, and not one of its keystrokes has yet reached Windows.
-
 

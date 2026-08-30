@@ -1,6 +1,6 @@
 # Testing plan
 
-A staged plan for hardening Macro Recorder. Stages 1 to 6 are complete; stage 7 is
+A staged plan for hardening Clickwork. Stages 1 to 6 are complete; stage 7 is
 outstanding. Each stage says who did the work and what came out of it.
 
 **The split that shaped everything below.** Through 1.3.5, Claude could read the source
@@ -1498,5 +1498,4 @@ schedule rather than stolen from the events behind it.
 Four faults were found in the test harnesses themselves, every one of which would
 otherwise have produced a confident and wrong conclusion. That ratio is worth
 remembering: a test that has never failed has not been tested either.
-
 

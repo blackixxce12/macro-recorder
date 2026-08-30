@@ -18,9 +18,9 @@ fn main() {
     {
         let mut res = winresource::WindowsResource::new();
         res.set_icon("assets/icon.ico");
-        res.set("FileDescription", "Macro Recorder");
-        res.set("ProductName", "Macro Recorder");
-        res.set("OriginalFilename", "MacroRecorder.exe");
+        res.set("FileDescription", "Clickwork");
+        res.set("ProductName", "Clickwork");
+        res.set("OriginalFilename", "Clickwork.exe");
         res.set("LegalCopyright", "MIT License");
 
         // A missing resource compiler (rc.exe / windres.exe) should cost you the
@@ -30,6 +30,5 @@ fn main() {
         }
     }
 }
-
 
 

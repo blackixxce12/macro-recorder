@@ -1,0 +1,99 @@
+<?xml version="1.0" encoding="utf-8"?>
+
+<!--
+  Installer source for Clickwork.
+
+  Built with WiX 7:
+
+      wix extension add -g WixToolset.UI.wixext
+      wix build packaging/Clickwork.wxs -ext WixToolset.UI.wixext -arch x64 \
+          -d Version=2.0.0 -o packaging/Clickwork.msi
+
+  Two things here are deliberate and worth not undoing.
+
+  The install folder is chosen by the person installing, through WixUI_InstallDir. That
+  matters more for this program than for most: Clickwork keeps its data next to its own
+  executable whenever that folder is writable, and falls back to %APPDATA%\Clickwork
+  when it is not. So installing into the default Program Files puts templates, logs and
+  run history under %APPDATA%, while installing into, say, D:\Clickwork puts them right
+  there beside the exe. Both are correct; the choice belongs to the user.
+
+  UpgradeCode is fixed forever. Change it and Windows stops seeing later builds as
+  upgrades of this product, leaving people with two Clickworks installed side by side.
+-->
+
+<Wix xmlns="http://wixtoolset.org/schemas/v4/wxs"
+     xmlns:ui="http://wixtoolset.org/schemas/v4/wxs/ui">
+
+  <Package Name="Clickwork"
+           Manufacturer="Clickwork"
+           Version="$(var.Version)"
+           UpgradeCode="7587AB22-F3E1-40C2-8B6A-739744829A2A"
+           Scope="perMachine"
+           Compressed="yes">
+
+    <SummaryInformation Description="Clickwork - macro recorder for Windows" />
+
+    <MajorUpgrade AllowSameVersionUpgrades="yes"
+                  DowngradeErrorMessage="A newer version of Clickwork is already installed." />
+
+    <MediaTemplate EmbedCab="yes" />
+
+    <Icon Id="ClickworkIcon" SourceFile="..\assets\icon.ico" />
+    <Property Id="ARPPRODUCTICON" Value="ClickworkIcon" />
+    <Property Id="ARPNOREPAIR" Value="1" />
+
+    <Feature Id="Main" Title="Clickwork" Level="1">
+      <ComponentGroupRef Id="AppComponents" />
+    </Feature>
+
+    <ui:WixUI Id="WixUI_InstallDir" InstallDirectory="INSTALLFOLDER" />
+    <WixVariable Id="WixUILicenseRtf" Value="license.rtf" />
+
+  </Package>
+
+  <Fragment>
+    <StandardDirectory Id="ProgramFiles64Folder">
+      <Directory Id="INSTALLFOLDER" Name="Clickwork" />
+    </StandardDirectory>
+    <StandardDirectory Id="DesktopFolder" />
+    <StandardDirectory Id="ProgramMenuFolder">
+      <Directory Id="AppMenuFolder" Name="Clickwork" />
+    </StandardDirectory>
+  </Fragment>
+
+  <Fragment>
+    <ComponentGroup Id="AppComponents">
+
+      <Component Id="MainExecutable" Directory="INSTALLFOLDER" Guid="*">
+        <File Id="ClickworkExe" Name="Clickwork.exe" Source="Clickwork.exe" KeyPath="yes">
+          <!-- WorkingDirectory is set for tidiness only: Clickwork locates its data
+               folder from the path of its own executable, not from the working
+               directory, so a shortcut started from anywhere still finds it. -->
+          <Shortcut Id="DesktopShortcut"
+                    Directory="DesktopFolder"
+                    Name="Clickwork"
+                    Description="Record what you do, then do it again"
+                    WorkingDirectory="INSTALLFOLDER"
+                    Icon="ClickworkIcon"
+                    Advertise="yes" />
+          <Shortcut Id="StartMenuShortcut"
+                    Directory="AppMenuFolder"
+                    Name="Clickwork"
+                    Description="Record what you do, then do it again"
+                    WorkingDirectory="INSTALLFOLDER"
+                    Icon="ClickworkIcon"
+                    Advertise="yes" />
+        </File>
+      </Component>
+
+      <!-- The Start menu folder is ours, so it goes when the product does. -->
+      <Component Id="StartMenuFolderCleanup" Directory="AppMenuFolder" Guid="A1F4C0E8-6B2D-4E77-9C31-0D5A8E6B4F12">
+        <RemoveFolder Id="RemoveAppMenuFolder" On="uninstall" />
+        <RegistryValue Root="HKCU" Key="Software\Clickwork" Name="StartMenu" Type="integer" Value="1" KeyPath="yes" />
+      </Component>
+
+    </ComponentGroup>
+  </Fragment>
+
+</Wix>
