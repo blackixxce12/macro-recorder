@@ -1,6 +1,6 @@
 [package]
 name = "macro-recorder"
-version = "1.9.5"
+version = "1.9.6"
 edition = "2024"
 rust-version = "1.98.0"
 description = "A modern, DPI-aware macro recorder that records straight into image-matched steps, with Desktop Duplication capture, native Windows 11 Mica/Acrylic, Virtual Desktop isolation, and secure shutdown"
@@ -13,14 +13,27 @@ build = "build.rs"
 # still works with --no-default-features.
 default = ["winocr"]
 winocr = []
+# Development only, never in a release. Compiles egui's inspection protocol so the
+# running UI can be read and driven from outside; it costs about 800 KB. It is
+# deliberately not part of `default`, so `cargo build --release` cannot pick it up by
+# accident: the file that goes on GitHub must never carry a debug port. Build the
+# inspect copy into its own target directory, which keeps it from overwriting the
+# shipped binary and keeps either build from invalidating the other's cache:
+#
+#   cargo build --release --features inspect --target-dir target/inspect
+#   cp target/inspect/release/macro-recorder.exe target/inspect/release/MacroInspect.exe
+#
+# then run MacroInspect.exe with EGUI_INSPECTION=1. The rename is a copy rather than a
+# second [[bin]] target on purpose: two targets sharing one src/main.rs make cargo warn
+# on every command, including the release build, which is too high a price for a tool
+# only ever used here.
+inspect = ["eframe/inspection"]
 
 [dependencies]
 # GUI & Serialization
-# `inspection` is deliberately absent. It compiles egui's inspection protocol and
-# its msgpack/accesskit dependencies into the binary - about 830 KB - to serve a
-# debug port that a shipped build never opens. Add it back to this list to drive
-# the running UI from outside (see "Inspecting the live UI" in the README); take
-# it out again before a release.
+# `inspection` is deliberately absent here. It is reachable through the optional
+# `inspect` feature above, which is how the MacroInspect copy is built; leaving it
+# out of this list is what keeps the shipped binary free of a debug port.
 eframe = { version = "0.36", default-features = false, features = ["default_fonts", "glow", "persistence", "wayland", "x11"] }
 egui = "0.36"
 serde = { version = "1.0.229", features = ["derive"] }
