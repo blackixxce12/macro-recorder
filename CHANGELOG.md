@@ -7,6 +7,57 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); version
 
 ---
 
+## [1.9.6]
+
+The main window, gone over with the interface actually in front of us.
+
+Every item here came out of looking at the running program rather than reading its
+source: a development build carrying egui's inspection protocol was driven from
+outside, screenshotted, resized and scrolled. Two of the six turned out to be things
+no amount of reading would have found.
+
+### Changed
+
+- **Twenty-seven sections are now in seven groups**, the same grouping the handbook
+  already uses for the same material. The list was flat and in code order, which is
+  not an order anyone reads by: image search, one of the two things this program is
+  for, sat twenty-second, below the text expander. It is now first under **What it
+  sees**. The groups are captions and rules, not another level of collapsing — a
+  second click to reach a setting would have cost more than the flat wall did.
+
+- **The status line is a pinned panel instead of the last line of the scroll.** It
+  says whether a recording or a run is going on, and the one person guaranteed not to
+  have scrolled past twenty-seven sections to read it was the person who wanted that.
+
+- **The window uses its width.** The scroll area used to shrink to its widest line, so
+  a window widened to 1240 points left roughly three quarters of itself empty and
+  gained nothing. Rules, headers and hit targets now span the window, and past 900
+  points the groups split into two columns — at 1240 the whole program fits on one
+  screen with nothing to scroll. The controls inside a section still sit at their
+  natural width, which is deliberate: a checkbox stretched across 1800 points is not an
+  improvement.
+
+- **The handbook button moved into the status panel.** It used to float in an overlay
+  anchored to the window's right edge, on top of whatever was underneath it, which at
+  the bottom of the list meant on top of the status band.
+
+- **Hotkeys are named in one place.** Record and Play were labelled twice — greyed
+  beside their buttons, and again in the status line in a different format — while the
+  emergency stop, which has no button at all, appeared only in the status line. The
+  status line keeps all three; the labels beside the buttons are gone.
+
+- **The icons are off the section headers.** Twenty-seven thin monochrome glyphs at
+  text weight and text colour did not help anyone scan a list; the group captions do
+  that job now. Action buttons keep theirs.
+
+### Fixed
+
+- Two of the four checkboxes under **Appearance** carried an emoji and two did not, in
+  all six languages.
+- The banner comment above the screen-recording section named the hotkeys section.
+
+---
+
 ## [1.9.5]
 
 A display over the game, a timeline of every run, and a video of what happened.
